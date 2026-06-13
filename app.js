@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.06';
+const APP_VERSION = '1.07';
 const CONTRACT_TEMPLATES = {
   'pvr-vincitu': {
     label: 'PVR Vincitu',
@@ -405,7 +405,6 @@ function handleNewForm() {
   elements.templateFile.value = '';
   elements.contractType.value = 'pvr-vincitu';
   document.getElementById('roleLegale').checked = true;
-  document.getElementById('regimeOrdinario').checked = true;
   setDefaultDates();
   updateDocumentUploadsMeta();
   clearValidation();
@@ -490,7 +489,7 @@ function collectFormData() {
   }
 
   data.roleType = document.querySelector('input[name="roleType"]:checked')?.value || 'legale-rappresentante';
-  data.fiscalRegime = document.querySelector('input[name="fiscalRegime"]:checked')?.value || 'regime-ordinario';
+  data.fiscalRegime = document.querySelector('input[name="fiscalRegime"]:checked')?.value || '';
   data.criminalNulla = elements.criminalNulla.checked;
   data.annexAConfirmed = document.getElementById('annexAConfirmed').checked;
   data.antimafiaConfirmed = document.getElementById('antimafiaConfirmed').checked;
@@ -1042,6 +1041,7 @@ async function fillTemplate(templateBytes, data) {
 
   setExclusiveCheckboxes(fields, ROLE_CHECKBOXES, data.roleType);
   setExclusiveCheckboxes(fields, REGIME_CHECKBOXES, data.fiscalRegime);
+  setCheckboxValue(fields, 'nulla', data.criminalNulla);
 
   if (state.signatureDataUrl) {
     await drawSignatureOnSignatureLines(pdfDoc, form);
@@ -1108,6 +1108,19 @@ function setExclusiveCheckboxes(fields, group, selectedName) {
       field.uncheck();
     }
   });
+}
+
+function setCheckboxValue(fields, fieldName, checked) {
+  const field = fields.get(fieldName);
+  if (!field || typeof field.check !== 'function') {
+    return;
+  }
+
+  if (checked) {
+    field.check();
+  } else {
+    field.uncheck();
+  }
 }
 
 async function drawSignatureOnSignatureLines(pdfDoc, form) {

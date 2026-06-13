@@ -51,6 +51,44 @@ const REGIME_CHECKBOXES = [
   'associazioni-non-dotati-di-p-iva',
 ];
 
+const SIGNATURE_LAYOUTS = {
+  default: {
+    xOffset: 16,
+    yOffset: -10,
+    maxWidth: 150,
+    extraWidth: 70,
+    height: 42,
+  },
+  4: {
+    xOffset: 8,
+    yOffset: -4,
+    maxWidth: 126,
+    extraWidth: 18,
+    height: 34,
+  },
+  5: {
+    xOffset: 8,
+    yOffset: -4,
+    maxWidth: 126,
+    extraWidth: 18,
+    height: 34,
+  },
+  6: {
+    xOffset: 8,
+    yOffset: -4,
+    maxWidth: 118,
+    extraWidth: 14,
+    height: 32,
+  },
+  7: {
+    xOffset: 8,
+    yOffset: -4,
+    maxWidth: 118,
+    extraWidth: 14,
+    height: 32,
+  },
+};
+
 const STEP_DEFINITIONS = [
   {
     title: 'Dati Azienda',
@@ -1090,11 +1128,13 @@ async function drawSignatureOnSignatureLines(pdfDoc, form) {
     }
 
     const page = pages[pageIndex];
-    const width = Math.min(150, rect.width + 70);
-    const height = 42;
+    const pageNumber = pageIndex + 1;
+    const layout = SIGNATURE_LAYOUTS[pageNumber] || SIGNATURE_LAYOUTS.default;
+    const width = Math.min(layout.maxWidth, rect.width + layout.extraWidth);
+    const height = layout.height;
     page.drawImage(signatureImage, {
-      x: rect.x + rect.width + 16,
-      y: rect.y - 10,
+      x: rect.x + rect.width + layout.xOffset,
+      y: rect.y + layout.yOffset,
       width,
       height,
     });

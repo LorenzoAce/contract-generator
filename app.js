@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
+const APP_VERSION = '1.01';
 const CONTRACT_TEMPLATES = {
   'pvr-vincitu': {
     label: 'PVR Vincitu',
@@ -61,32 +62,32 @@ const SIGNATURE_LAYOUTS = {
     height: 42,
   },
   4: {
-    anchor: 'after-field',
-    xOffset: 10,
-    yOffset: -2,
-    fixedWidth: 108,
-    height: 24,
+    anchor: 'absolute',
+    absoluteX: 318,
+    yOffset: -4,
+    fixedWidth: 126,
+    height: 26,
   },
   5: {
-    anchor: 'after-field',
-    xOffset: 10,
-    yOffset: -2,
-    fixedWidth: 108,
-    height: 24,
+    anchor: 'absolute',
+    absoluteX: 318,
+    yOffset: -4,
+    fixedWidth: 126,
+    height: 26,
   },
   6: {
-    anchor: 'after-field',
-    xOffset: 10,
-    yOffset: -2,
-    fixedWidth: 104,
-    height: 22,
+    anchor: 'absolute',
+    absoluteX: 306,
+    yOffset: -4,
+    fixedWidth: 122,
+    height: 24,
   },
   7: {
-    anchor: 'after-field',
-    xOffset: 10,
-    yOffset: -2,
-    fixedWidth: 104,
-    height: 22,
+    anchor: 'absolute',
+    absoluteX: 306,
+    yOffset: -4,
+    fixedWidth: 122,
+    height: 24,
   },
 };
 
@@ -155,6 +156,7 @@ const state = {
 };
 
 const elements = {
+  appVersion: document.getElementById('appVersion'),
   form: document.getElementById('contractForm'),
   contractType: document.getElementById('contractType'),
   statusBox: document.getElementById('statusBox'),
@@ -198,6 +200,7 @@ const elements = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+  renderAppVersion();
   initializeCanvas();
   renderStepper();
   bindEvents();
@@ -208,6 +211,13 @@ document.addEventListener('DOMContentLoaded', () => {
   loadFromLocalStorage({ silent: true, notifyIfMissing: false });
   refreshUi();
 });
+
+function renderAppVersion() {
+  if (elements.appVersion) {
+    elements.appVersion.textContent = APP_VERSION;
+  }
+  document.title = `Contract Manager ${APP_VERSION}`;
+}
 
 function bindEvents() {
   elements.btnNuovo.addEventListener('click', handleNewForm);
@@ -1102,7 +1112,8 @@ function setExclusiveCheckboxes(fields, group, selectedName) {
 
 async function drawSignatureOnSignatureLines(pdfDoc, form) {
   const signatureField = form.getTextField('luogo-e-data');
-  const signatureBytes = await fetch(state.signatureDataUrl).then((response) => response.arrayBuffer());
+  const trimmedSignatureDataUrl = await getTrimmedSignatureDataUrl(state.signatureDataUrl);
+  const signatureBytes = await fetch(trimmedSignatureDataUrl).then((response) => response.arrayBuffer());
   const signatureImage = await pdfDoc.embedPng(signatureBytes);
   const pages = pdfDoc.getPages();
 
@@ -1118,15 +1129,73 @@ async function drawSignatureOnSignatureLines(pdfDoc, form) {
     const layout = SIGNATURE_LAYOUTS[pageNumber] || SIGNATURE_LAYOUTS.default;
     const width = layout.fixedWidth || Math.min(layout.maxWidth, rect.width + layout.extraWidth);
     const height = layout.height;
-    const x = layout.anchor === 'field-left'
-      ? rect.x + layout.xOffset
-      : rect.x + rect.width + layout.xOffset;
+    const x = layout.anchor === 'absolute'
+      ? layout.absoluteX
+      : layout.anchor === 'field-left'
+        ? rect.x + layout.xOffset
+        : rect.x + rect.width + layout.xOffset;
     page.drawImage(signatureImage, {
       x,
       y: rect.y + layout.yOffset,
       width,
       height,
     });
+  });
+}
+
+async function getTrimmedSignatureDataUrl(dataUrl) {
+  const image = await loadImageFromDataUrl(dataUrl);
+  const sourceCanvas = document.createElement('canvas');
+  sourceCanvas.width = image.width;
+  sourceCanvas.height = image.height;
+  const sourceCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+  sourceCtx.drawImage(image, 0, 0);
+
+  const { width, height } = sourceCanvas;
+  const pixels = sourceCtx.getImageData(0, 0, width, height).data;
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const alpha = pixels[(y * width + x) * 4 + 3];
+      if (alpha === 0) {
+        continue;
+      }
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  if (maxX < 0 || maxY < 0) {
+    return dataUrl;
+  }
+
+  const paddingX = 18;
+  const paddingY = 12;
+  const cropX = Math.max(0, minX - paddingX);
+  const cropY = Math.max(0, minY - paddingY);
+  const cropWidth = Math.min(width - cropX, (maxX - minX + 1) + paddingX * 2);
+  const cropHeight = Math.min(height - cropY, (maxY - minY + 1) + paddingY * 2);
+
+  const croppedCanvas = document.createElement('canvas');
+  croppedCanvas.width = cropWidth;
+  croppedCanvas.height = cropHeight;
+  const croppedCtx = croppedCanvas.getContext('2d');
+  croppedCtx.drawImage(sourceCanvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+  return croppedCanvas.toDataURL('image/png');
+}
+
+function loadImageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Impossibile leggere l immagine della firma.'));
+    image.src = dataUrl;
   });
 }
 

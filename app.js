@@ -156,6 +156,8 @@ const elements = {
   criminalNulla: document.getElementById('criminalNulla'),
   criminalRecordNotes: document.getElementById('criminalRecordNotes'),
   pendingChargesNotes: document.getElementById('pendingChargesNotes'),
+  navigationWarningModal: document.getElementById('navigationWarningModal'),
+  navigationWarningMessage: document.getElementById('navigationWarningMessage'),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -176,19 +178,22 @@ function bindEvents() {
   elements.btnCarica.addEventListener('click', () => loadFromLocalStorage({ silent: false, notifyIfMissing: true }));
   elements.btnGenera.addEventListener('click', async () => {
     if (!validateAllRequiredSteps()) {
-      goToFirstInvalidStep();
-      setStatus('Completa e conferma tutte le fasi prima di generare il PDF.', 'warning');
-      return;
+      showNavigationWarning(state.currentStep, {
+        actionLabel: 'generare il PDF',
+        statusMessage: 'Ci sono campi obbligatori mancanti, ma puoi comunque generare il PDF.',
+      });
     }
     await buildPdf();
   });
   elements.btnScarica.addEventListener('click', async () => {
+    if (!validateAllRequiredSteps()) {
+      showNavigationWarning(state.currentStep, {
+        actionLabel: 'scaricare il PDF',
+        statusMessage: 'Ci sono campi obbligatori mancanti, ma puoi comunque scaricare il PDF.',
+      });
+    }
+
     if (!state.generatedPdfBytes) {
-      if (!validateAllRequiredSteps()) {
-        goToFirstInvalidStep();
-        setStatus('Completa e conferma tutte le fasi prima di scaricare il PDF.', 'warning');
-        return;
-      }
       await buildPdf();
     }
     downloadGeneratedPdf();
@@ -567,8 +572,7 @@ function goToStep(stepIndex, { validateCurrent = true } = {}) {
   if (validateCurrent && targetStep > state.currentStep) {
     const valid = validateStep(state.currentStep, { silent: false });
     if (!valid) {
-      setStatus('Completa i campi richiesti della fase corrente per continuare.', 'warning');
-      return;
+      showNavigationWarning(state.currentStep);
     }
   }
 
@@ -1136,6 +1140,19 @@ function resetGeneratedPdf() {
 function setStatus(message, tone) {
   elements.statusBox.className = `alert alert-${tone} shadow-sm mb-4`;
   elements.statusBox.textContent = message;
+}
+
+function showNavigationWarning(stepIndex, options = {}) {
+  const stepTitle = STEP_DEFINITIONS[stepIndex]?.title || 'questa sezione';
+  const actionLabel = options.actionLabel || 'continuare';
+  const statusMessage = options.statusMessage || `Sezione incompleta: completa i campi obbligatori di "${stepTitle}" prima della generazione del PDF.`;
+  elements.navigationWarningMessage.textContent = `Puoi continuare e anche ${actionLabel}, ma prima di chiudere correttamente la pratica devi completare i campi obbligatori in "${stepTitle}".`;
+  setStatus(statusMessage, 'warning');
+
+  if (window.bootstrap?.Modal && elements.navigationWarningModal) {
+    const modal = window.bootstrap.Modal.getOrCreateInstance(elements.navigationWarningModal);
+    modal.show();
+  }
 }
 
 function compactName(firstName, lastName) {

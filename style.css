@@ -539,6 +539,8 @@ body.app-shell {
 .preview-card {
   position: sticky;
   top: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
 }
 
 .mini-metric {

@@ -570,10 +570,7 @@ function goToStep(stepIndex, { validateCurrent = true } = {}) {
   }
 
   if (validateCurrent && targetStep > state.currentStep) {
-    const valid = validateStep(state.currentStep, { silent: false });
-    if (!valid) {
-      showNavigationWarning(state.currentStep);
-    }
+    validateStep(state.currentStep, { silent: false });
   }
 
   state.currentStep = targetStep;
@@ -1061,13 +1058,7 @@ function formatDate(value) {
 
 function buildPlaceAndDate(data) {
   const customValue = sanitizeText(data.placeAndDate);
-  if (customValue) {
-    return customValue;
-  }
-
-  const city = sanitizeText(data.legalCity) || sanitizeText(data.birthCity) || '';
-  const today = formatDate(new Date().toISOString().slice(0, 10));
-  return city ? `${city}, ${today}` : today;
+  return customValue;
 }
 
 function setExclusiveCheckboxes(fields, group, selectedName) {

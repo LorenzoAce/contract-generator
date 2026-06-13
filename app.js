@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.05';
+const APP_VERSION = '1.06';
 const CONTRACT_TEMPLATES = {
   'pvr-vincitu': {
     label: 'PVR Vincitu',
@@ -176,14 +176,12 @@ const elements = {
   btnResetTemplate: document.getElementById('btnResetTemplate'),
   btnPrev: document.getElementById('btnPrev'),
   btnNext: document.getElementById('btnNext'),
-  currentStepLabel: document.getElementById('currentStepLabel'),
   wizardTitle: document.getElementById('wizardTitle'),
   wizardDescription: document.getElementById('wizardDescription'),
   completionPercent: document.getElementById('completionPercent'),
   wizardProgressBar: document.getElementById('wizardProgressBar'),
   stepperNav: document.getElementById('stepperNav'),
   wizardSteps: Array.from(document.querySelectorAll('.wizard-step')),
-  autosaveStatus: document.getElementById('autosaveStatus'),
   annexASummary: document.getElementById('annexASummary'),
   antimafiaSummary: document.getElementById('antimafiaSummary'),
   finalSummary: document.getElementById('finalSummary'),
@@ -633,7 +631,6 @@ function updateWizardUi() {
   const step = STEP_DEFINITIONS[state.currentStep];
   const progress = Math.round(((state.currentStep + 1) / STEP_DEFINITIONS.length) * 100);
 
-  elements.currentStepLabel.textContent = `Fase ${state.currentStep + 1} di ${STEP_DEFINITIONS.length}`;
   elements.wizardTitle.textContent = step.title;
   elements.wizardDescription.textContent = step.description;
   elements.completionPercent.textContent = `${progress}%`;
@@ -958,6 +955,9 @@ function isValidIp(value) {
 }
 
 function updateAutosaveIndicator(stateName) {
+  if (!elements.autosaveStatus) {
+    return;
+  }
   elements.autosaveStatus.classList.remove('is-saving', 'is-saved');
   if (stateName === 'saving') {
     elements.autosaveStatus.classList.add('is-saving');

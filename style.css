@@ -618,6 +618,7 @@ body.app-shell {
 .sidebar-stack {
   display: grid;
   gap: 1rem;
+  min-width: 0;
 }
 
 .wizard-sidebar .wizard-steps {
@@ -661,9 +662,32 @@ body.app-shell {
 
 .preview-card {
   position: sticky;
-  top: 1rem;
-  max-height: calc(100vh - 2rem);
-  overflow: auto;
+  top: 5.75rem;
+  max-height: calc(100vh - 6.75rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
+  width: 100%;
+}
+
+.wizard-sidebar,
+.wizard-sidebar .card-body,
+.wizard-sidebar .wizard-shell,
+.wizard-sidebar .sidebar-journey,
+.wizard-sidebar .wizard-steps,
+.wizard-sidebar .step-nav {
+  min-width: 0;
+}
+
+.wizard-sidebar .step-nav {
+  overflow: hidden;
+}
+
+.wizard-sidebar .step-nav__title,
+.wizard-sidebar .step-nav__status,
+.sidebar-current-step__title {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .mini-metric {
@@ -709,6 +733,7 @@ textarea.form-control {
 @media (max-width: 1199.98px) {
   .preview-card {
     position: static;
+    max-height: none;
   }
 
   .pdf-preview {

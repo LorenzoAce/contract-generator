@@ -53,6 +53,7 @@ const REGIME_CHECKBOXES = [
 
 const SIGNATURE_LAYOUTS = {
   default: {
+    anchor: 'after-field',
     xOffset: 16,
     yOffset: -10,
     maxWidth: 150,
@@ -60,32 +61,32 @@ const SIGNATURE_LAYOUTS = {
     height: 42,
   },
   4: {
-    xOffset: 8,
-    yOffset: -4,
-    maxWidth: 126,
-    extraWidth: 18,
-    height: 34,
+    anchor: 'after-field',
+    xOffset: 10,
+    yOffset: -2,
+    fixedWidth: 108,
+    height: 24,
   },
   5: {
-    xOffset: 8,
-    yOffset: -4,
-    maxWidth: 126,
-    extraWidth: 18,
-    height: 34,
+    anchor: 'after-field',
+    xOffset: 10,
+    yOffset: -2,
+    fixedWidth: 108,
+    height: 24,
   },
   6: {
-    xOffset: 8,
-    yOffset: -4,
-    maxWidth: 118,
-    extraWidth: 14,
-    height: 32,
+    anchor: 'after-field',
+    xOffset: 10,
+    yOffset: -2,
+    fixedWidth: 104,
+    height: 22,
   },
   7: {
-    xOffset: 8,
-    yOffset: -4,
-    maxWidth: 118,
-    extraWidth: 14,
-    height: 32,
+    anchor: 'after-field',
+    xOffset: 10,
+    yOffset: -2,
+    fixedWidth: 104,
+    height: 22,
   },
 };
 
@@ -1115,10 +1116,13 @@ async function drawSignatureOnSignatureLines(pdfDoc, form) {
     const page = pages[pageIndex];
     const pageNumber = pageIndex + 1;
     const layout = SIGNATURE_LAYOUTS[pageNumber] || SIGNATURE_LAYOUTS.default;
-    const width = Math.min(layout.maxWidth, rect.width + layout.extraWidth);
+    const width = layout.fixedWidth || Math.min(layout.maxWidth, rect.width + layout.extraWidth);
     const height = layout.height;
+    const x = layout.anchor === 'field-left'
+      ? rect.x + layout.xOffset
+      : rect.x + rect.width + layout.xOffset;
     page.drawImage(signatureImage, {
-      x: rect.x + rect.width + layout.xOffset,
+      x,
       y: rect.y + layout.yOffset,
       width,
       height,

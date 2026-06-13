@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.03';
+const APP_VERSION = '1.04';
 const CONTRACT_TEMPLATES = {
   'pvr-vincitu': {
     label: 'PVR Vincitu',
@@ -63,28 +63,28 @@ const SIGNATURE_LAYOUTS = {
   },
   4: {
     anchor: 'absolute',
-    absoluteX: 352,
+    absoluteX: 364,
     yOffset: -4,
     fixedWidth: 126,
     height: 26,
   },
   5: {
     anchor: 'absolute',
-    absoluteX: 352,
+    absoluteX: 364,
     yOffset: -4,
     fixedWidth: 126,
     height: 26,
   },
   6: {
     anchor: 'absolute',
-    absoluteX: 340,
+    absoluteX: 352,
     yOffset: -4,
     fixedWidth: 122,
     height: 24,
   },
   7: {
     anchor: 'absolute',
-    absoluteX: 340,
+    absoluteX: 352,
     yOffset: -4,
     fixedWidth: 122,
     height: 24,

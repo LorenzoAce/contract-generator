@@ -1,8 +1,14 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const TEMPLATE_CANDIDATES = [
-  'contratto-pvr-vincitu-compilabile-2026.pdf',
-  'contratto-template.pdf',
-];
+const CONTRACT_TEMPLATES = {
+  'pvr-vincitu': {
+    label: 'PVR Vincitu',
+    directory: 'templates/pvr-vincitu',
+    templateCandidates: [
+      'contratto-template.pdf',
+      'contratto-pvr-vincitu-compilabile-2026.pdf',
+    ],
+  },
+};
 
 const TEXT_FIELD_MAPPING = {
   companyName: 'societa',
@@ -111,6 +117,7 @@ const state = {
 
 const elements = {
   form: document.getElementById('contractForm'),
+  contractType: document.getElementById('contractType'),
   statusBox: document.getElementById('statusBox'),
   templateFile: document.getElementById('templateFile'),
   templateInfo: document.getElementById('templateInfo'),
@@ -191,6 +198,7 @@ function bindEvents() {
   elements.btnUsaTemplate.addEventListener('click', selectManualTemplate);
   elements.btnResetTemplate.addEventListener('click', resetTemplateSelection);
   elements.templateFile.addEventListener('change', selectManualTemplate);
+  elements.contractType.addEventListener('change', handleContractTypeChange);
   elements.btnPrev.addEventListener('click', () => goToStep(state.currentStep - 1, { validateCurrent: false }));
   elements.btnNext.addEventListener('click', () => goToStep(state.currentStep + 1, { validateCurrent: true }));
   elements.documentUploads.addEventListener('change', handleDocumentUploadsChange);
@@ -242,6 +250,15 @@ function handleFormInteraction(event) {
     triggerAutosave();
     refreshUi();
   }
+}
+
+function handleContractTypeChange() {
+  resetTemplateSelection({ silent: true });
+  updateTemplateInfo();
+  resetGeneratedPdf();
+  triggerAutosave();
+  refreshUi();
+  setStatus(`Contratto selezionato: ${getCurrentContractConfig().label}.`, 'secondary');
 }
 
 function initializeCanvas() {
@@ -349,6 +366,7 @@ function handleNewForm() {
   state.selectedTemplateFile = null;
   state.selectedTemplateName = '';
   elements.templateFile.value = '';
+  elements.contractType.value = 'pvr-vincitu';
   document.getElementById('roleLegale').checked = true;
   document.getElementById('regimeOrdinario').checked = true;
   setDefaultDates();
@@ -494,22 +512,25 @@ async function selectManualTemplate() {
   setStatus(`Template selezionato manualmente: ${file.name}`, 'success');
 }
 
-function resetTemplateSelection() {
+function resetTemplateSelection(options = {}) {
   state.selectedTemplateFile = null;
   state.selectedTemplateName = '';
   elements.templateFile.value = '';
   updateTemplateInfo();
-  triggerAutosave();
-  setStatus('Selezione manuale rimossa. Verra usato il template automatico se disponibile.', 'secondary');
+  if (!options.silent) {
+    triggerAutosave();
+    setStatus('Selezione manuale rimossa. Verra usato il template automatico del contratto selezionato.', 'secondary');
+  }
 }
 
 function updateTemplateInfo() {
+  const contractConfig = getCurrentContractConfig();
   if (state.selectedTemplateFile) {
-    elements.templateInfo.textContent = `Template in uso: ${state.selectedTemplateName} (selezione manuale).`;
+    elements.templateInfo.textContent = `Template in uso: ${state.selectedTemplateName} (selezione manuale per ${contractConfig.label}).`;
     return;
   }
 
-  elements.templateInfo.textContent = `Template automatico: ${TEMPLATE_CANDIDATES.join(', ')}.`;
+  elements.templateInfo.textContent = `Template automatico da ${contractConfig.directory}: ${contractConfig.templateCandidates.join(', ')}.`;
 }
 
 function handleDocumentUploadsChange() {
@@ -930,17 +951,19 @@ async function buildPdf() {
 }
 
 async function loadTemplateBytes() {
+  const contractConfig = getCurrentContractConfig();
   if (state.selectedTemplateFile) {
     return new Uint8Array(await state.selectedTemplateFile.arrayBuffer());
   }
 
-  for (const candidate of TEMPLATE_CANDIDATES) {
+  for (const candidate of contractConfig.templateCandidates) {
     try {
-      const response = await fetch(candidate);
+      const templatePath = `${contractConfig.directory}/${candidate}`;
+      const response = await fetch(templatePath);
       if (!response.ok) {
         continue;
       }
-      state.selectedTemplateName = candidate;
+      state.selectedTemplateName = templatePath;
       updateTemplateInfo();
       return new Uint8Array(await response.arrayBuffer());
     } catch (error) {
@@ -948,7 +971,7 @@ async function loadTemplateBytes() {
     }
   }
 
-  throw new Error('Impossibile leggere automaticamente il template PDF. Seleziona manualmente il file PDF dal campo Template PDF locale.');
+  throw new Error(`Impossibile leggere automaticamente il template PDF dalla cartella ${contractConfig.directory}. Seleziona manualmente il file dal menu Template PDF.`);
 }
 
 async function fillTemplate(templateBytes, data) {
@@ -1146,4 +1169,9 @@ function escapeHtml(value) {
 
 function normalizeBoolean(value) {
   return value === true || value === 'true' || value === 'on' || value === 1 || value === '1';
+}
+
+function getCurrentContractConfig() {
+  const contractType = elements.contractType?.value || 'pvr-vincitu';
+  return CONTRACT_TEMPLATES[contractType] || CONTRACT_TEMPLATES['pvr-vincitu'];
 }

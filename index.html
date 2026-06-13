@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Contract Generator</title>
-  <link rel="stylesheet" href="./node_modules/bootstrap/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="./vendor/bootstrap/bootstrap.min.css">
   <link rel="stylesheet" href="./style.css">
 </head>
 <body class="app-shell">
@@ -35,7 +35,7 @@
     </div>
 
     <div class="alert alert-info shadow-sm mb-4" id="statusBox">
-      Compila i passaggi del wizard. Il template PDF viene rilevato automaticamente dalla cartella corrente oppure puo essere selezionato manualmente.
+      Compila i passaggi del wizard. Il template PDF viene rilevato automaticamente nella cartella del contratto selezionato oppure puo essere scelto manualmente.
     </div>
 
     <div class="row g-4 justify-content-center align-items-start">
@@ -552,7 +552,7 @@
           <div>
             <div class="eyebrow text-dark mb-2">Template PDF</div>
             <h2 class="h4 mb-1" id="templateModalLabel">Selezione template</h2>
-            <p class="text-secondary mb-0">Scegli manualmente il PDF da usare oppure lascia la ricerca automatica nella cartella del progetto.</p>
+            <p class="text-secondary mb-0">Scegli manualmente il PDF da usare oppure lascia la ricerca automatica nella cartella del contratto selezionato.</p>
           </div>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
         </div>
@@ -560,7 +560,7 @@
           <div class="surface-panel">
             <label for="templateFile" class="form-label">Template PDF locale</label>
             <input class="form-control" type="file" id="templateFile" accept=".pdf,application/pdf">
-            <div class="form-text">Nome rilevato automaticamente: <code>contratto-pvr-vincitu-compilabile-2026.pdf</code>.</div>
+            <div class="form-text">Per ora il contratto `PVR Vincitu` cerca il template nella cartella dedicata `templates/pvr-vincitu`.</div>
             <div class="small text-secondary mt-3" id="templateInfo">Template automatico: in attesa di verifica.</div>
           </div>
         </div>
@@ -572,8 +572,8 @@
     </div>
   </div>
 
-  <script src="./node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="./node_modules/pdf-lib/dist/pdf-lib.min.js"></script>
+  <script src="./vendor/bootstrap/bootstrap.bundle.min.js"></script>
+  <script src="./vendor/pdf-lib/pdf-lib.min.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

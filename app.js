@@ -25,6 +25,8 @@ const TEXT_FIELD_MAPPING = {
   documentNumber: 'numero-documento',
   documentIssuer: 'organo-di-rilascio',
   documentIssueDate: 'data-rilascio',
+  criminalTribunal: 'tribunale',
+  criminalTribunal2: 'tribunale-2',
   representativeTaxCode: 'codice-fiscale-titolare',
   birthDate: 'data-nascita-titolare',
   birthCity: 'citta-titolare',
@@ -221,6 +223,8 @@ const elements = {
   annexAConfirmedError: document.getElementById('annexAConfirmedError'),
   antimafiaConfirmedError: document.getElementById('antimafiaConfirmedError'),
   criminalNulla: document.getElementById('criminalNulla'),
+  criminalTribunal: document.getElementById('criminalTribunal'),
+  criminalTribunal2: document.getElementById('criminalTribunal2'),
   criminalRecordNotes: document.getElementById('criminalRecordNotes'),
   pendingChargesNotes: document.getElementById('pendingChargesNotes'),
 };
@@ -631,6 +635,7 @@ function getDefaultTemplateMapping() {
   const text = {
     ...TEXT_FIELD_MAPPING,
     vatNumber: 'partita-iva',
+    criminalCombinedNotes: 'a-proprio-carico-2',
     representativeFullName: 'nome-e-cognome-titolare',
     operationalCityComposite: 'citta-sede-operativa',
     placeAndDate: 'luogo-e-data',
@@ -655,6 +660,8 @@ function getDefaultTemplateMapping() {
     checkboxGroups,
     checkboxes: {
       criminalNulla: 'nulla',
+      criminalOppure: 'oppure',
+      criminalOppure2: 'oppure-2',
     },
     signature: {
       anchorTextField: 'luogo-e-data',
@@ -1268,9 +1275,13 @@ function updateDocumentUploadsMeta() {
 
 function toggleCriminalFields() {
   const disabled = elements.criminalNulla.checked;
+  elements.criminalTribunal.disabled = disabled;
+  elements.criminalTribunal2.disabled = disabled;
   elements.criminalRecordNotes.disabled = disabled;
   elements.pendingChargesNotes.disabled = disabled;
   if (disabled) {
+    clearInvalid(elements.criminalTribunal);
+    clearInvalid(elements.criminalTribunal2);
     clearInvalid(elements.criminalRecordNotes);
     clearInvalid(elements.pendingChargesNotes);
   }
@@ -1502,6 +1513,8 @@ function validateCriminalStep({ silent = false } = {}) {
   }
 
   let valid = true;
+  valid = validateNamedField('criminalTribunal', { silent, customRequiredMessage: 'Compila il tribunale del casellario oppure seleziona NULLA.' }) && valid;
+  valid = validateNamedField('criminalTribunal2', { silent, customRequiredMessage: 'Compila il tribunale dei carichi pendenti oppure seleziona NULLA.' }) && valid;
   valid = validateNamedField('criminalRecordNotes', { silent, customRequiredMessage: 'Compila il casellario oppure seleziona NULLA.' }) && valid;
   valid = validateNamedField('pendingChargesNotes', { silent, customRequiredMessage: 'Compila i carichi pendenti oppure seleziona NULLA.' }) && valid;
   return valid;
@@ -1718,6 +1731,7 @@ async function fillTemplate(templateBytes, data) {
     representativeFullName,
     operationalCityComposite: operationalCityValue,
     placeAndDate: buildPlaceAndDate(data),
+    criminalCombinedNotes: buildCriminalCombinedNotes(data),
   };
 
   Object.entries(activeMapping.text).forEach(([sourceKey, pdfFieldName]) => {
@@ -1739,6 +1753,11 @@ async function fillTemplate(templateBytes, data) {
   applyExclusiveGroup(fields, activeMapping.checkboxGroups.roleType, data.roleType);
   applyExclusiveGroup(fields, activeMapping.checkboxGroups.fiscalRegime, data.fiscalRegime);
   setCheckboxValue(fields, activeMapping.checkboxes.criminalNulla, data.criminalNulla);
+  const criminalHasAnyNotes = Boolean(sanitizeText(data.criminalRecordNotes) || sanitizeText(data.pendingChargesNotes));
+  const criminalHasAnyTribunal = Boolean(sanitizeText(data.criminalTribunal) || sanitizeText(data.criminalTribunal2));
+  const criminalOppureChecked = !data.criminalNulla && (criminalHasAnyNotes || criminalHasAnyTribunal);
+  setCheckboxValue(fields, activeMapping.checkboxes.criminalOppure, criminalOppureChecked);
+  setCheckboxValue(fields, activeMapping.checkboxes.criminalOppure2, criminalOppureChecked);
 
   if (state.signatureDataUrl) {
     await drawSignatureOnSignatureLines(pdfDoc, form, activeMapping.signature.anchorTextField);
@@ -1813,6 +1832,12 @@ function formatDateShortYear(value) {
 function buildPlaceAndDate(data) {
   const customValue = sanitizeText(data.placeAndDate);
   return customValue;
+}
+
+function buildCriminalCombinedNotes(data) {
+  const part1 = sanitizeText(data.criminalRecordNotes);
+  const part2 = sanitizeText(data.pendingChargesNotes);
+  return [part1, part2].filter(Boolean).join(' | ');
 }
 
 function setExclusiveCheckboxes(fields, group, selectedName) {

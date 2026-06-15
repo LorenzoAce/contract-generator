@@ -556,7 +556,9 @@
                         <label for="placeAndDate" class="form-label">Luogo e data firma</label>
                         <input type="text" class="form-control mb-3" id="placeAndDate" name="placeAndDate" placeholder="Es. Milano, 13/06/2026">
                         <div class="form-text mb-4">Se lasciato vuoto, il campo restera vuoto anche nel PDF generato.</div>
+                        <input type="file" class="form-control d-none" id="signatureUpload" accept="image/*">
                         <div class="d-grid gap-2">
+                          <button type="button" class="btn btn-outline-primary" id="btnCaricaFirma">Carica immagine firma</button>
                           <button type="button" class="btn btn-outline-dark" id="btnPulisciFirma">Cancella firma</button>
                           <button type="button" class="btn btn-success" id="btnInserisciFirma">Inserisci firma nel PDF</button>
                         </div>

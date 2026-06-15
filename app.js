@@ -194,12 +194,14 @@ const elements = {
   contractLoadList: document.getElementById('contractLoadList'),
   contractLoadStatus: document.getElementById('contractLoadStatus'),
   signatureCanvas: document.getElementById('signatureCanvas'),
+  signatureUpload: document.getElementById('signatureUpload'),
   signatureInfo: document.getElementById('signatureInfo'),
   signatureError: document.getElementById('signatureError'),
   btnNuovo: document.getElementById('btnNuovo'),
   btnSalva: document.getElementById('btnSalva'),
   btnCarica: document.getElementById('btnCarica'),
   btnGenera: document.getElementById('btnGenera'),
+  btnCaricaFirma: document.getElementById('btnCaricaFirma'),
   btnPulisciFirma: document.getElementById('btnPulisciFirma'),
   btnInserisciFirma: document.getElementById('btnInserisciFirma'),
   btnUsaTemplate: document.getElementById('btnUsaTemplate'),
@@ -259,6 +261,10 @@ function bindEvents() {
       downloadGeneratedPdf();
     }
   });
+  elements.btnCaricaFirma.addEventListener('click', () => {
+    elements.signatureUpload.click();
+  });
+  elements.signatureUpload.addEventListener('change', handleSignatureUpload);
   elements.btnPulisciFirma.addEventListener('click', clearSignatureCanvas);
   elements.btnInserisciFirma.addEventListener('click', captureSignature);
   elements.btnUsaTemplate.addEventListener('click', selectManualTemplate);
@@ -454,8 +460,62 @@ function isCanvasBlank() {
 }
 
 function setDefaultDates() {
-  // Non precompiliamo date nel wizard: se il campo compare nel PDF
-  // deve arrivare da un input esplicito dell'utente.
+}
+
+async function handleSignatureUpload() {
+  const [file] = elements.signatureUpload.files;
+  if (!file) {
+    return;
+  }
+
+  if (!file.type.startsWith('image/')) {
+    elements.signatureError.textContent = 'Carica un file immagine valido.';
+    setStatus('Formato firma non valido: scegli un immagine.', 'warning');
+    return;
+  }
+
+  try {
+    const dataUrl = await readFileAsDataUrl(file);
+    await drawImageDataUrlOnSignatureCanvas(dataUrl);
+    state.signatureDataUrl = elements.signatureCanvas.toDataURL('image/png');
+    elements.signatureInfo.textContent = `Firma caricata da immagine: ${file.name}`;
+    elements.signatureError.textContent = '';
+    resetGeneratedPdf();
+    triggerAutosave();
+    refreshUi();
+    setStatus('Immagine firma caricata correttamente.', 'success');
+  } catch (error) {
+    elements.signatureError.textContent = 'Impossibile caricare l immagine della firma.';
+    setStatus(elements.signatureError.textContent, 'danger');
+  } finally {
+    elements.signatureUpload.value = '';
+  }
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Errore lettura file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function drawImageDataUrlOnSignatureCanvas(dataUrl) {
+  const image = await loadImageFromDataUrl(dataUrl);
+  const canvas = elements.signatureCanvas;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const padding = 16;
+  const maxWidth = canvas.width - padding * 2;
+  const maxHeight = canvas.height - padding * 2;
+  const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
+  const drawWidth = image.width * scale;
+  const drawHeight = image.height * scale;
+  const x = (canvas.width - drawWidth) / 2;
+  const y = (canvas.height - drawHeight) / 2;
+  ctx.drawImage(image, x, y, drawWidth, drawHeight);
 }
 
 function handleNewForm() {
@@ -1727,6 +1787,13 @@ async function fillTemplate(templateBytes, data) {
   ].filter(Boolean).join(' ');
 
   const activeMapping = getActiveTemplateMapping();
+  const issueDateTargets = new Set(['data-rilascio', 'data-rilascio-documento']);
+  const mappedIssueDateField = sanitizeText(activeMapping.text.documentIssueDate);
+  if (mappedIssueDateField) {
+    issueDateTargets.add(mappedIssueDateField);
+  }
+  const issueDateValue = formatDate(data.documentIssueDate);
+
   const computedValues = {
     representativeFullName,
     operationalCityComposite: operationalCityValue,
@@ -1735,6 +1802,9 @@ async function fillTemplate(templateBytes, data) {
   };
 
   Object.entries(activeMapping.text).forEach(([sourceKey, pdfFieldName]) => {
+    if (sourceKey === 'documentIssueDate') {
+      return;
+    }
     const trimmedFieldName = sanitizeText(pdfFieldName);
     if (!trimmedFieldName) {
       return;
@@ -1749,6 +1819,12 @@ async function fillTemplate(templateBytes, data) {
       : formatFieldValue(sourceKey, data[sourceKey]);
     field.setText(value);
   });
+
+  if (issueDateValue) {
+    issueDateTargets.forEach((fieldName) => {
+      setIssueDateField(fields, fieldName, issueDateValue);
+    });
+  }
 
   applyExclusiveGroup(fields, activeMapping.checkboxGroups.roleType, data.roleType);
   applyExclusiveGroup(fields, activeMapping.checkboxGroups.fiscalRegime, data.fiscalRegime);
@@ -1786,7 +1862,7 @@ function formatFieldValue(sourceKey, rawValue) {
   }
 
   if (sourceKey === 'documentIssueDate') {
-    return formatDateShortYear(rawValue);
+    return formatDate(rawValue);
   }
 
   return sanitizeText(rawValue);
@@ -1827,6 +1903,43 @@ function formatDateShortYear(value) {
   }
 
   return normalized;
+}
+
+function setIssueDateField(fields, fieldName, fullDateValue) {
+  const trimmedName = sanitizeText(fieldName);
+  if (!trimmedName) {
+    return;
+  }
+
+  const field = fields.get(trimmedName);
+  if (!field || typeof field.setText !== 'function') {
+    return;
+  }
+
+  const minWidgetWidth = getMinWidgetWidth(field);
+  if (typeof field.setFontSize === 'function') {
+    const fontSize = minWidgetWidth && minWidgetWidth < 70 ? 7 : minWidgetWidth && minWidgetWidth < 90 ? 9 : 10;
+    field.setFontSize(fontSize);
+  }
+
+  const valueToSet = minWidgetWidth && minWidgetWidth < 60 ? formatDateShortYear(fullDateValue) : fullDateValue;
+  field.setText(valueToSet);
+}
+
+function getMinWidgetWidth(field) {
+  try {
+    const widgets = field.acroField.getWidgets();
+    if (!widgets || !widgets.length) {
+      return null;
+    }
+    const widths = widgets.map((widget) => {
+      const rect = widget.getRectangle();
+      return rect?.width;
+    }).filter((width) => typeof width === 'number' && Number.isFinite(width));
+    return widths.length ? Math.min(...widths) : null;
+  } catch (error) {
+    return null;
+  }
 }
 
 function buildPlaceAndDate(data) {

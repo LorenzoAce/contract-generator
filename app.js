@@ -148,6 +148,10 @@ const state = {
   currentStep: 0,
   selectedTemplateFile: null,
   selectedTemplateName: '',
+  currentTemplateHash: '',
+  currentTemplateBytes: null,
+  templateMapping: null,
+  mappingDraft: null,
   generatedPdfBytes: null,
   signatureDataUrl: '',
   isDrawing: false,
@@ -162,6 +166,18 @@ const elements = {
   statusBox: document.getElementById('statusBox'),
   templateFile: document.getElementById('templateFile'),
   templateInfo: document.getElementById('templateInfo'),
+  btnOpenMapping: document.getElementById('btnOpenMapping'),
+  mappingModal: document.getElementById('mappingModal'),
+  mappingTemplateInfo: document.getElementById('mappingTemplateInfo'),
+  mappingFilter: document.getElementById('mappingFilter'),
+  mappingTextBody: document.getElementById('mappingTextBody'),
+  mappingRoleBody: document.getElementById('mappingRoleBody'),
+  mappingFiscalBody: document.getElementById('mappingFiscalBody'),
+  mappingCriminalNulla: document.getElementById('mappingCriminalNulla'),
+  mappingSignatureAnchor: document.getElementById('mappingSignatureAnchor'),
+  mappingStatus: document.getElementById('mappingStatus'),
+  btnSaveMapping: document.getElementById('btnSaveMapping'),
+  btnResetMapping: document.getElementById('btnResetMapping'),
   signatureCanvas: document.getElementById('signatureCanvas'),
   signatureInfo: document.getElementById('signatureInfo'),
   signatureError: document.getElementById('signatureError'),
@@ -236,6 +252,10 @@ function bindEvents() {
   elements.btnResetTemplate.addEventListener('click', resetTemplateSelection);
   elements.templateFile.addEventListener('change', selectManualTemplate);
   elements.contractType.addEventListener('change', handleContractTypeChange);
+  elements.btnOpenMapping.addEventListener('click', openMappingModal);
+  elements.btnSaveMapping.addEventListener('click', saveCurrentMapping);
+  elements.btnResetMapping.addEventListener('click', resetMappingToDefault);
+  elements.mappingFilter.addEventListener('input', () => renderMappingTables({ preserveSelections: true }));
   elements.btnPrev.addEventListener('click', () => goToStep(state.currentStep - 1, { validateCurrent: false }));
   elements.btnNext.addEventListener('click', () => goToStep(state.currentStep + 1, { validateCurrent: true }));
   elements.documentUploads.addEventListener('change', handleDocumentUploadsChange);
@@ -291,6 +311,10 @@ function handleFormInteraction(event) {
 
 function handleContractTypeChange() {
   resetTemplateSelection({ silent: true });
+  state.currentTemplateHash = '';
+  state.currentTemplateBytes = null;
+  state.templateMapping = null;
+  state.mappingDraft = null;
   updateTemplateInfo();
   resetGeneratedPdf();
   triggerAutosave();
@@ -567,6 +591,382 @@ function updateTemplateInfo() {
   }
 
   elements.templateInfo.textContent = `Template automatico da ${contractConfig.directory}: ${contractConfig.templateCandidates.join(', ')}.`;
+}
+
+function getDefaultTemplateMapping() {
+  const text = {
+    ...TEXT_FIELD_MAPPING,
+    representativeFullName: 'nome-e-cognome-titolare',
+    operationalCityComposite: 'citta-sede-operativa',
+    placeAndDate: 'luogo-e-data',
+  };
+
+  const checkboxGroups = {
+    roleType: {},
+    fiscalRegime: {},
+  };
+
+  ROLE_CHECKBOXES.forEach((value) => {
+    checkboxGroups.roleType[value] = value;
+  });
+
+  REGIME_CHECKBOXES.forEach((value) => {
+    checkboxGroups.fiscalRegime[value] = value;
+  });
+
+  return {
+    version: 1,
+    text,
+    checkboxGroups,
+    checkboxes: {
+      criminalNulla: 'nulla',
+    },
+    signature: {
+      anchorTextField: 'luogo-e-data',
+    },
+  };
+}
+
+function mergeDeep(base, override) {
+  if (!override || typeof override !== 'object' || Array.isArray(override)) {
+    return base;
+  }
+  const result = { ...(base && typeof base === 'object' ? base : {}) };
+  Object.entries(override).forEach(([key, value]) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      result[key] = mergeDeep(result[key], value);
+      return;
+    }
+    result[key] = value;
+  });
+  return result;
+}
+
+function getActiveTemplateMapping() {
+  return mergeDeep(getDefaultTemplateMapping(), state.templateMapping || {});
+}
+
+async function computeSha256Hex(bytes) {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const hashArray = Array.from(new Uint8Array(digest));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function setTemplateContext(templateBytes, templateName) {
+  state.currentTemplateBytes = templateBytes;
+  if (!window.crypto?.subtle) {
+    return;
+  }
+
+  const templateHash = await computeSha256Hex(templateBytes);
+  if (!templateHash || templateHash === state.currentTemplateHash) {
+    return;
+  }
+
+  state.currentTemplateHash = templateHash;
+  try {
+    const mapping = await fetchTemplateMapping(templateHash);
+    state.templateMapping = mapping;
+  } catch (error) {
+    state.templateMapping = null;
+  }
+}
+
+async function fetchTemplateMapping(templateHash) {
+  const params = new URLSearchParams({
+    templateHash,
+    contractType: elements.contractType.value,
+  });
+  const response = await fetch(`/api/template-mappings?${params}`);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    const body = await safeJson(response);
+    throw new Error(body?.error || 'Errore nel recupero della mappa dal database');
+  }
+  const row = await response.json();
+  return row.mapping || null;
+}
+
+async function upsertTemplateMapping(templateHash, mapping) {
+  const response = await fetch('/api/template-mappings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      templateHash,
+      contractType: elements.contractType.value,
+      templateName: state.selectedTemplateName || templateHash,
+      mapping,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await safeJson(response);
+    throw new Error(body?.error || 'Errore nel salvataggio della mappa nel database');
+  }
+
+  const row = await response.json();
+  return row.mapping || mapping;
+}
+
+async function safeJson(response) {
+  try {
+    return await response.json();
+  } catch (error) {
+    return null;
+  }
+}
+
+async function openMappingModal() {
+  try {
+    elements.mappingStatus.textContent = 'Caricamento campi dal template...';
+    const templateBytes = await loadTemplateBytes();
+    const { textFieldNames, checkboxFieldNames } = await inspectTemplateFields(templateBytes);
+    state.mappingDraft = mergeDeep(getDefaultTemplateMapping(), state.templateMapping || {});
+
+    elements.mappingTemplateInfo.textContent = `Template: ${state.selectedTemplateName || 'manuale'} | SHA-256: ${state.currentTemplateHash || 'non disponibile'} | Testo: ${textFieldNames.length} | Checkbox: ${checkboxFieldNames.length}`;
+    elements.mappingStatus.textContent = state.templateMapping ? 'Mappa caricata dal database.' : 'Nessuna mappa trovata nel database: stai usando i default.';
+
+    elements.mappingTextBody.dataset.textFields = JSON.stringify(textFieldNames);
+    elements.mappingTextBody.dataset.checkboxFields = JSON.stringify(checkboxFieldNames);
+    renderMappingTables({ preserveSelections: false });
+
+    const modal = window.bootstrap.Modal.getOrCreateInstance(elements.mappingModal);
+    modal.show();
+  } catch (error) {
+    setStatus(error.message || 'Errore apertura mappatura campi.', 'danger');
+  }
+}
+
+async function inspectTemplateFields(templateBytes) {
+  const { PDFDocument } = window.PDFLib;
+  const pdfDoc = await PDFDocument.load(templateBytes);
+  const form = pdfDoc.getForm();
+  const fields = form.getFields();
+
+  const textFieldNames = [];
+  const checkboxFieldNames = [];
+
+  fields.forEach((field) => {
+    const name = field.getName();
+    if (typeof field.setText === 'function') {
+      textFieldNames.push(name);
+      return;
+    }
+    if (typeof field.check === 'function' && typeof field.uncheck === 'function') {
+      checkboxFieldNames.push(name);
+    }
+  });
+
+  textFieldNames.sort((a, b) => a.localeCompare(b));
+  checkboxFieldNames.sort((a, b) => a.localeCompare(b));
+  return { textFieldNames, checkboxFieldNames };
+}
+
+function getWizardTextFieldNames() {
+  const inputs = Array.from(elements.form.querySelectorAll('input[name], select[name], textarea[name]'));
+  const names = inputs
+    .filter((el) => el.type !== 'file' && el.type !== 'checkbox' && el.type !== 'radio')
+    .map((el) => el.name)
+    .filter(Boolean);
+
+  const unique = Array.from(new Set(names));
+  unique.sort((a, b) => a.localeCompare(b));
+  return unique;
+}
+
+function getLabelForName(name) {
+  const field = elements.form.querySelector(`[name="${CSS.escape(name)}"]`);
+  const id = field?.id;
+  const label = id ? document.querySelector(`label[for="${CSS.escape(id)}"]`) : null;
+  const labelText = sanitizeText(label?.textContent);
+  return labelText || name;
+}
+
+function buildSelectOptions(names, selectedValue) {
+  const selected = sanitizeText(selectedValue);
+  const options = [];
+  options.push(`<option value="">—</option>`);
+  const set = new Set(names);
+  if (selected && !set.has(selected)) {
+    options.push(`<option value="${escapeHtml(selected)}">${escapeHtml(selected)} (non trovato)</option>`);
+  }
+  names.forEach((name) => {
+    const safe = escapeHtml(name);
+    options.push(`<option value="${safe}">${safe}</option>`);
+  });
+  return options.join('');
+}
+
+function renderMappingTables({ preserveSelections } = {}) {
+  if (!state.mappingDraft) {
+    return;
+  }
+
+  const textFieldNames = safeParseArray(elements.mappingTextBody.dataset.textFields);
+  const checkboxFieldNames = safeParseArray(elements.mappingTextBody.dataset.checkboxFields);
+  const filterValue = sanitizeText(elements.mappingFilter.value).toLowerCase();
+
+  const textRows = [];
+  const wizardTextNames = getWizardTextFieldNames();
+  const extraTextKeys = [
+    { key: 'representativeFullName', label: 'Nome e cognome (composto)' },
+    { key: 'operationalCityComposite', label: 'Sede operativa (CAP Comune Provincia)' },
+    { key: 'placeAndDate', label: 'Luogo e data' },
+  ];
+
+  const allTextKeys = [
+    ...wizardTextNames.map((name) => ({ key: name, label: getLabelForName(name) })),
+    ...extraTextKeys,
+  ];
+
+  allTextKeys.forEach(({ key, label }) => {
+    const normalizedKey = sanitizeText(key);
+    const normalizedLabel = sanitizeText(label);
+    if (filterValue && !normalizedKey.toLowerCase().includes(filterValue) && !normalizedLabel.toLowerCase().includes(filterValue)) {
+      return;
+    }
+
+    const currentValue = preserveSelections
+      ? elements.mappingTextBody.querySelector(`[data-map-text="${CSS.escape(normalizedKey)}"]`)?.value
+      : state.mappingDraft.text[normalizedKey] || '';
+
+    textRows.push(`
+      <tr>
+        <td>
+          <div class="fw-semibold">${escapeHtml(normalizedLabel)}</div>
+          <div class="text-secondary small">${escapeHtml(normalizedKey)}</div>
+        </td>
+        <td>
+          <select class="form-select form-select-sm" data-map-text="${escapeHtml(normalizedKey)}">
+            ${buildSelectOptions(textFieldNames, currentValue)}
+          </select>
+        </td>
+      </tr>
+    `);
+  });
+
+  elements.mappingTextBody.innerHTML = textRows.join('') || `
+    <tr>
+      <td colspan="2" class="text-secondary">Nessun campo corrisponde al filtro.</td>
+    </tr>
+  `;
+
+  elements.mappingTextBody.querySelectorAll('select[data-map-text]').forEach((select) => {
+    const key = select.dataset.mapText;
+    select.value = sanitizeText(select.value);
+    select.addEventListener('change', () => {
+      state.mappingDraft.text[key] = select.value;
+    });
+  });
+
+  renderCheckboxGroupMapping(elements.mappingRoleBody, 'roleType', checkboxFieldNames, preserveSelections);
+  renderCheckboxGroupMapping(elements.mappingFiscalBody, 'fiscalRegime', checkboxFieldNames, preserveSelections);
+
+  const currentCriminal = preserveSelections ? elements.mappingCriminalNulla.value : state.mappingDraft.checkboxes.criminalNulla;
+  elements.mappingCriminalNulla.innerHTML = buildSelectOptions(checkboxFieldNames, currentCriminal);
+  elements.mappingCriminalNulla.value = sanitizeText(currentCriminal);
+  elements.mappingCriminalNulla.onchange = () => {
+    state.mappingDraft.checkboxes.criminalNulla = elements.mappingCriminalNulla.value;
+  };
+
+  const currentAnchor = preserveSelections ? elements.mappingSignatureAnchor.value : state.mappingDraft.signature.anchorTextField;
+  elements.mappingSignatureAnchor.innerHTML = buildSelectOptions(textFieldNames, currentAnchor);
+  elements.mappingSignatureAnchor.value = sanitizeText(currentAnchor);
+  elements.mappingSignatureAnchor.onchange = () => {
+    state.mappingDraft.signature.anchorTextField = elements.mappingSignatureAnchor.value;
+  };
+}
+
+function renderCheckboxGroupMapping(container, groupName, checkboxFieldNames, preserveSelections) {
+  const radios = Array.from(elements.form.querySelectorAll(`input[type="radio"][name="${CSS.escape(groupName)}"]`));
+  const rows = radios.map((radio) => {
+    const value = sanitizeText(radio.value);
+    const label = sanitizeText(radio.closest('label')?.textContent) || value;
+    const currentValue = preserveSelections
+      ? container.querySelector(`[data-map-group="${CSS.escape(groupName)}"][data-map-value="${CSS.escape(value)}"]`)?.value
+      : state.mappingDraft.checkboxGroups[groupName]?.[value] || '';
+    return `
+      <div class="d-flex gap-2 align-items-center">
+        <div class="small text-secondary" style="min-width: 180px;">${escapeHtml(label)}</div>
+        <select class="form-select form-select-sm" data-map-group="${escapeHtml(groupName)}" data-map-value="${escapeHtml(value)}">
+          ${buildSelectOptions(checkboxFieldNames, currentValue)}
+        </select>
+      </div>
+    `;
+  });
+
+  container.innerHTML = rows.join('') || `<div class="text-secondary small">Nessuna opzione trovata.</div>`;
+  container.querySelectorAll('select[data-map-group]').forEach((select) => {
+    const group = select.dataset.mapGroup;
+    const value = select.dataset.mapValue;
+    select.value = sanitizeText(select.value);
+    select.addEventListener('change', () => {
+      if (!state.mappingDraft.checkboxGroups[group]) {
+        state.mappingDraft.checkboxGroups[group] = {};
+      }
+      state.mappingDraft.checkboxGroups[group][value] = select.value;
+    });
+  });
+}
+
+function safeParseArray(value) {
+  try {
+    const parsed = JSON.parse(value || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function resetMappingToDefault() {
+  state.mappingDraft = getDefaultTemplateMapping();
+  renderMappingTables({ preserveSelections: false });
+  elements.mappingStatus.textContent = 'Default ripristinati (non ancora salvati).';
+}
+
+async function saveCurrentMapping() {
+  if (!state.mappingDraft) {
+    return;
+  }
+  if (!state.currentTemplateHash) {
+    elements.mappingStatus.textContent = 'SHA-256 del template non disponibile. Prova a ricaricare il template.';
+    return;
+  }
+
+  try {
+    elements.mappingStatus.textContent = 'Salvataggio nel database...';
+    const saved = await upsertTemplateMapping(state.currentTemplateHash, state.mappingDraft);
+    state.templateMapping = saved;
+    elements.mappingStatus.textContent = 'Mappa salvata correttamente.';
+    setStatus('Mappatura campi salvata nel database.', 'success');
+  } catch (error) {
+    elements.mappingStatus.textContent = error.message || 'Errore salvataggio mappa.';
+    setStatus(elements.mappingStatus.textContent, 'danger');
+  }
+}
+
+function applyExclusiveGroup(fields, mapping, selectedValue) {
+  const groupMapping = mapping && typeof mapping === 'object' ? mapping : {};
+  Object.values(groupMapping).forEach((fieldName) => {
+    const field = fields.get(fieldName);
+    if (!field || typeof field.check !== 'function') {
+      return;
+    }
+    field.uncheck();
+  });
+
+  const targetFieldName = sanitizeText(groupMapping?.[selectedValue]);
+  if (!targetFieldName) {
+    return;
+  }
+
+  const targetField = fields.get(targetFieldName);
+  if (!targetField || typeof targetField.check !== 'function') {
+    return;
+  }
+  targetField.check();
 }
 
 function handleDocumentUploadsChange() {
@@ -987,7 +1387,9 @@ async function buildPdf() {
 async function loadTemplateBytes() {
   const contractConfig = getCurrentContractConfig();
   if (state.selectedTemplateFile) {
-    return new Uint8Array(await state.selectedTemplateFile.arrayBuffer());
+    const bytes = new Uint8Array(await state.selectedTemplateFile.arrayBuffer());
+    await setTemplateContext(bytes, state.selectedTemplateName || state.selectedTemplateFile.name);
+    return bytes;
   }
 
   for (const candidate of contractConfig.templateCandidates) {
@@ -999,7 +1401,9 @@ async function loadTemplateBytes() {
       }
       state.selectedTemplateName = templatePath;
       updateTemplateInfo();
-      return new Uint8Array(await response.arrayBuffer());
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      await setTemplateContext(bytes, templatePath);
+      return bytes;
     } catch (error) {
       // Alcuni browser bloccano il fetch di file locali: si passa al fallback successivo.
     }
@@ -1025,26 +1429,35 @@ async function fillTemplate(templateBytes, data) {
     sanitizeText(data.operationalProvince),
   ].filter(Boolean).join(' ');
 
-  const textValues = {
-    ...mapTextValues(data, representativeFullName, operationalCityValue),
-    'nome-e-cognome-titolare': representativeFullName,
-    'luogo-e-data': buildPlaceAndDate(data),
+  const activeMapping = getActiveTemplateMapping();
+  const computedValues = {
+    representativeFullName,
+    operationalCityComposite: operationalCityValue,
+    placeAndDate: buildPlaceAndDate(data),
   };
 
-  Object.entries(textValues).forEach(([fieldName, value]) => {
-    const field = fields.get(fieldName);
+  Object.entries(activeMapping.text).forEach(([sourceKey, pdfFieldName]) => {
+    const trimmedFieldName = sanitizeText(pdfFieldName);
+    if (!trimmedFieldName) {
+      return;
+    }
+    const field = fields.get(trimmedFieldName);
     if (!field || typeof field.setText !== 'function') {
       return;
     }
+
+    const value = Object.prototype.hasOwnProperty.call(computedValues, sourceKey)
+      ? computedValues[sourceKey]
+      : formatFieldValue(sourceKey, data[sourceKey]);
     field.setText(value);
   });
 
-  setExclusiveCheckboxes(fields, ROLE_CHECKBOXES, data.roleType);
-  setExclusiveCheckboxes(fields, REGIME_CHECKBOXES, data.fiscalRegime);
-  setCheckboxValue(fields, 'nulla', data.criminalNulla);
+  applyExclusiveGroup(fields, activeMapping.checkboxGroups.roleType, data.roleType);
+  applyExclusiveGroup(fields, activeMapping.checkboxGroups.fiscalRegime, data.fiscalRegime);
+  setCheckboxValue(fields, activeMapping.checkboxes.criminalNulla, data.criminalNulla);
 
   if (state.signatureDataUrl) {
-    await drawSignatureOnSignatureLines(pdfDoc, form);
+    await drawSignatureOnSignatureLines(pdfDoc, form, activeMapping.signature.anchorTextField);
   }
 
   form.flatten();
@@ -1123,8 +1536,9 @@ function setCheckboxValue(fields, fieldName, checked) {
   }
 }
 
-async function drawSignatureOnSignatureLines(pdfDoc, form) {
-  const signatureField = form.getTextField('luogo-e-data');
+async function drawSignatureOnSignatureLines(pdfDoc, form, anchorTextFieldName) {
+  const signatureFieldName = sanitizeText(anchorTextFieldName) || 'luogo-e-data';
+  const signatureField = form.getTextField(signatureFieldName);
   const trimmedSignatureDataUrl = await getTrimmedSignatureDataUrl(state.signatureDataUrl);
   const signatureBytes = await fetch(trimmedSignatureDataUrl).then((response) => response.arrayBuffer());
   const signatureImage = await pdfDoc.embedPng(signatureBytes);

@@ -2,8 +2,9 @@
   "name": "contract-generator",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
+    "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -12,6 +13,8 @@
   "type": "commonjs",
   "dependencies": {
     "bootstrap": "^5.3.3",
-    "pdf-lib": "^1.17.1"
+    "express": "^4.21.2",
+    "pdf-lib": "^1.17.1",
+    "pg": "^8.13.1"
   }
 }

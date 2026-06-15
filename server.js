@@ -2,6 +2,10 @@ const path = require('path');
 const express = require('express');
 const {
   checkHealth,
+  deleteContract,
+  getContract,
+  listContracts,
+  saveContract,
   getTemplateMapping,
   saveTemplateMapping,
 } = require('./lib/template-mapping-service');
@@ -41,6 +45,60 @@ app.post('/api/template-mappings', async (req, res) => {
     res.json(await saveTemplateMapping(req.body || {}));
   } catch (error) {
     const statusCode = error.message.includes('sono richiesti') ? 400 : error.message.includes('Database non configurato') ? 503 : 500;
+    res.status(statusCode).json({ error: error.message || 'Errore database' });
+  }
+});
+
+app.get('/api/contracts', async (req, res) => {
+  try {
+    const items = await listContracts({ contractType: req.query.contractType });
+    res.json({ items });
+  } catch (error) {
+    const statusCode = error.message.includes('Database non configurato') ? 503 : 500;
+    res.status(statusCode).json({ error: error.message || 'Errore database' });
+  }
+});
+
+app.post('/api/contracts', async (req, res) => {
+  try {
+    const row = await saveContract(req.body || {});
+    res.json(row);
+  } catch (error) {
+    const statusCode = error.message.includes('sono richiesti') ? 400 : error.message.includes('Database non configurato') ? 503 : 500;
+    res.status(statusCode).json({ error: error.message || 'Errore database' });
+  }
+});
+
+app.get('/api/contracts/:id', async (req, res) => {
+  try {
+    const row = await getContract({ id: req.params.id });
+    if (!row) {
+      res.status(404).json({ error: 'Contratto non trovato' });
+      return;
+    }
+    res.json(row);
+  } catch (error) {
+    const statusCode = error.message.endsWith('richiesto') ? 400 : error.message.includes('Database non configurato') ? 503 : 500;
+    res.status(statusCode).json({ error: error.message || 'Errore database' });
+  }
+});
+
+app.put('/api/contracts/:id', async (req, res) => {
+  try {
+    const row = await saveContract({ ...(req.body || {}), id: req.params.id });
+    res.json(row);
+  } catch (error) {
+    const statusCode = error.message.includes('sono richiesti') ? 400 : error.message.includes('Database non configurato') ? 503 : 500;
+    res.status(statusCode).json({ error: error.message || 'Errore database' });
+  }
+});
+
+app.delete('/api/contracts/:id', async (req, res) => {
+  try {
+    await deleteContract({ id: req.params.id });
+    res.status(204).end();
+  } catch (error) {
+    const statusCode = error.message.endsWith('richiesto') ? 400 : error.message.includes('Database non configurato') ? 503 : 500;
     res.status(statusCode).json({ error: error.message || 'Errore database' });
   }
 });

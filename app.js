@@ -5,8 +5,8 @@ const CONTRACT_TEMPLATES = {
     label: 'PVR Vincitu',
     directory: 'templates/pvr-vincitu',
     templateCandidates: [
-      'contratto-template.pdf',
       'contratto-pvr-vincitu-compilabile-2026.pdf',
+      'contratto-template.pdf',
     ],
   },
 };
@@ -152,6 +152,9 @@ const state = {
   currentTemplateBytes: null,
   templateMapping: null,
   mappingDraft: null,
+  currentContractId: '',
+  currentContractName: '',
+  contractsCache: [],
   generatedPdfBytes: null,
   signatureDataUrl: '',
   isDrawing: false,
@@ -178,6 +181,16 @@ const elements = {
   mappingStatus: document.getElementById('mappingStatus'),
   btnSaveMapping: document.getElementById('btnSaveMapping'),
   btnResetMapping: document.getElementById('btnResetMapping'),
+  contractSaveModal: document.getElementById('contractSaveModal'),
+  contractSaveName: document.getElementById('contractSaveName'),
+  contractSaveStatus: document.getElementById('contractSaveStatus'),
+  btnContractSaveNew: document.getElementById('btnContractSaveNew'),
+  btnContractSaveUpdate: document.getElementById('btnContractSaveUpdate'),
+  contractLoadModal: document.getElementById('contractLoadModal'),
+  contractLoadFilter: document.getElementById('contractLoadFilter'),
+  btnContractRefresh: document.getElementById('btnContractRefresh'),
+  contractLoadList: document.getElementById('contractLoadList'),
+  contractLoadStatus: document.getElementById('contractLoadStatus'),
   signatureCanvas: document.getElementById('signatureCanvas'),
   signatureInfo: document.getElementById('signatureInfo'),
   signatureError: document.getElementById('signatureError'),
@@ -235,8 +248,8 @@ function renderAppVersion() {
 
 function bindEvents() {
   elements.btnNuovo.addEventListener('click', handleNewForm);
-  elements.btnSalva.addEventListener('click', () => saveToLocalStorage({ silent: false }));
-  elements.btnCarica.addEventListener('click', () => loadFromLocalStorage({ silent: false, notifyIfMissing: true }));
+  elements.btnSalva.addEventListener('click', openContractSaveModal);
+  elements.btnCarica.addEventListener('click', openContractLoadModal);
   elements.btnGenera.addEventListener('click', async () => {
     await buildPdf();
   });
@@ -256,6 +269,28 @@ function bindEvents() {
   elements.btnSaveMapping.addEventListener('click', saveCurrentMapping);
   elements.btnResetMapping.addEventListener('click', resetMappingToDefault);
   elements.mappingFilter.addEventListener('input', () => renderMappingTables({ preserveSelections: true }));
+  elements.btnContractSaveNew.addEventListener('click', saveNewContractToCloud);
+  elements.btnContractSaveUpdate.addEventListener('click', updateCurrentContractInCloud);
+  elements.btnContractRefresh.addEventListener('click', refreshContractList);
+  elements.contractLoadFilter.addEventListener('input', () => renderContractList(state.contractsCache));
+  elements.contractLoadList.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-contract-action]');
+    if (!button) {
+      return;
+    }
+    const action = button.dataset.contractAction;
+    const id = button.dataset.contractId;
+    if (!id) {
+      return;
+    }
+    if (action === 'load') {
+      loadContractFromCloud(id);
+      return;
+    }
+    if (action === 'delete') {
+      deleteContractFromCloud(id);
+    }
+  });
   elements.btnPrev.addEventListener('click', () => goToStep(state.currentStep - 1, { validateCurrent: false }));
   elements.btnNext.addEventListener('click', () => goToStep(state.currentStep + 1, { validateCurrent: true }));
   elements.documentUploads.addEventListener('change', handleDocumentUploadsChange);
@@ -315,6 +350,9 @@ function handleContractTypeChange() {
   state.currentTemplateBytes = null;
   state.templateMapping = null;
   state.mappingDraft = null;
+  state.currentContractId = '';
+  state.currentContractName = '';
+  state.contractsCache = [];
   updateTemplateInfo();
   resetGeneratedPdf();
   triggerAutosave();
@@ -426,6 +464,8 @@ function handleNewForm() {
   elements.form.reset();
   state.selectedTemplateFile = null;
   state.selectedTemplateName = '';
+  state.currentContractId = '';
+  state.currentContractName = '';
   elements.templateFile.value = '';
   elements.contractType.value = 'pvr-vincitu';
   document.getElementById('roleLegale').checked = true;
@@ -596,6 +636,7 @@ function updateTemplateInfo() {
 function getDefaultTemplateMapping() {
   const text = {
     ...TEXT_FIELD_MAPPING,
+    vatNumber: 'partita-iva',
     representativeFullName: 'nome-e-cognome-titolare',
     operationalCityComposite: 'citta-sede-operativa',
     placeAndDate: 'luogo-e-data',
@@ -967,6 +1008,253 @@ function applyExclusiveGroup(fields, mapping, selectedValue) {
     return;
   }
   targetField.check();
+}
+
+function openContractSaveModal() {
+  const defaultName = buildDefaultContractName();
+  elements.contractSaveName.value = state.currentContractName || defaultName;
+  elements.contractSaveStatus.textContent = 'Pronto.';
+  elements.btnContractSaveUpdate.disabled = !state.currentContractId;
+  const modal = window.bootstrap.Modal.getOrCreateInstance(elements.contractSaveModal);
+  modal.show();
+}
+
+async function openContractLoadModal() {
+  elements.contractLoadFilter.value = '';
+  elements.contractLoadStatus.textContent = 'Caricamento elenco...';
+  await refreshContractList({ silentErrors: false });
+  const modal = window.bootstrap.Modal.getOrCreateInstance(elements.contractLoadModal);
+  modal.show();
+}
+
+function buildDefaultContractName() {
+  const data = collectFormData();
+  const company = sanitizeText(data.companyName);
+  const vat = sanitizeText(data.vatOrTaxCode);
+  const date = new Date();
+  const dateLabel = date.toLocaleDateString('it-IT');
+  const parts = [company, vat ? `PIVA ${vat}` : '', dateLabel].filter(Boolean);
+  return parts.join(' - ') || `Contratto - ${dateLabel}`;
+}
+
+function buildContractPayload() {
+  const payload = collectFormData();
+  payload.signatureDataUrl = state.signatureDataUrl;
+  payload.currentStep = state.currentStep;
+  payload.selectedTemplateName = state.selectedTemplateName;
+  payload.contractType = elements.contractType.value;
+  payload.appVersion = APP_VERSION;
+  return payload;
+}
+
+async function saveNewContractToCloud() {
+  const name = sanitizeText(elements.contractSaveName.value) || buildDefaultContractName();
+  const id = generateId();
+
+  try {
+    elements.contractSaveStatus.textContent = 'Salvataggio...';
+    const row = await upsertContractToCloud({ id, name, payload: buildContractPayload() });
+    state.currentContractId = row.id;
+    state.currentContractName = row.name;
+    elements.btnContractSaveUpdate.disabled = false;
+    elements.contractSaveStatus.textContent = 'Salvato.';
+    setStatus(`Contratto salvato: ${row.name}`, 'success');
+    saveToLocalStorage({ silent: true });
+    await refreshContractList({ silentErrors: true });
+  } catch (error) {
+    elements.contractSaveStatus.textContent = error.message || 'Errore salvataggio.';
+    setStatus(elements.contractSaveStatus.textContent, 'danger');
+  }
+}
+
+async function updateCurrentContractInCloud() {
+  if (!state.currentContractId) {
+    return;
+  }
+
+  const name = sanitizeText(elements.contractSaveName.value) || state.currentContractName || buildDefaultContractName();
+  try {
+    elements.contractSaveStatus.textContent = 'Aggiornamento...';
+    const row = await upsertContractToCloud({ id: state.currentContractId, name, payload: buildContractPayload() });
+    state.currentContractName = row.name;
+    elements.contractSaveStatus.textContent = 'Aggiornato.';
+    setStatus(`Contratto aggiornato: ${row.name}`, 'success');
+    saveToLocalStorage({ silent: true });
+    await refreshContractList({ silentErrors: true });
+  } catch (error) {
+    elements.contractSaveStatus.textContent = error.message || 'Errore aggiornamento.';
+    setStatus(elements.contractSaveStatus.textContent, 'danger');
+  }
+}
+
+async function upsertContractToCloud({ id, name, payload }) {
+  const response = await fetch('/api/contracts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id,
+      contractType: elements.contractType.value,
+      name,
+      payload,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await safeJson(response);
+    throw new Error(body?.error || 'Errore salvataggio contratto.');
+  }
+
+  return response.json();
+}
+
+async function refreshContractList({ silentErrors } = {}) {
+  try {
+    const params = new URLSearchParams({ contractType: elements.contractType.value });
+    const response = await fetch(`/api/contracts?${params}`);
+    if (!response.ok) {
+      const body = await safeJson(response);
+      throw new Error(body?.error || 'Errore caricamento elenco contratti.');
+    }
+    const data = await response.json();
+    state.contractsCache = Array.isArray(data.items) ? data.items : [];
+    renderContractList(state.contractsCache);
+    elements.contractLoadStatus.textContent = `${state.contractsCache.length} contratti trovati.`;
+  } catch (error) {
+    elements.contractLoadStatus.textContent = error.message || 'Errore caricamento.';
+    if (!silentErrors) {
+      setStatus(elements.contractLoadStatus.textContent, 'danger');
+    }
+    renderContractList([]);
+  }
+}
+
+function renderContractList(items) {
+  const filter = sanitizeText(elements.contractLoadFilter.value).toLowerCase();
+  const filtered = (items || []).filter((item) => {
+    const name = sanitizeText(item.name).toLowerCase();
+    return !filter || name.includes(filter);
+  });
+
+  if (!filtered.length) {
+    elements.contractLoadList.innerHTML = `<div class="text-secondary">Nessun contratto trovato.</div>`;
+    return;
+  }
+
+  elements.contractLoadList.innerHTML = filtered.map((item) => {
+    const updated = formatTimestamp(item.updated_at);
+    const subtitle = updated ? `Aggiornato: ${updated}` : '';
+    return `
+      <div class="list-group-item d-flex flex-column flex-md-row gap-2 align-items-md-center justify-content-between">
+        <div>
+          <div class="fw-semibold">${escapeHtml(item.name || 'Senza nome')}</div>
+          <div class="small text-secondary">${escapeHtml(subtitle)}</div>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-sm btn-primary" data-contract-action="load" data-contract-id="${escapeHtml(item.id)}">Carica</button>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-contract-action="delete" data-contract-id="${escapeHtml(item.id)}">Elimina</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadContractFromCloud(id) {
+  try {
+    elements.contractLoadStatus.textContent = 'Caricamento contratto...';
+    const response = await fetch(`/api/contracts/${encodeURIComponent(id)}`);
+    if (!response.ok) {
+      const body = await safeJson(response);
+      throw new Error(body?.error || 'Errore caricamento contratto.');
+    }
+    const row = await response.json();
+    applyContractPayload(row);
+    elements.contractLoadStatus.textContent = `Caricato: ${row.name}`;
+    setStatus(`Contratto caricato: ${row.name}`, 'success');
+    const modal = window.bootstrap.Modal.getOrCreateInstance(elements.contractLoadModal);
+    modal.hide();
+  } catch (error) {
+    elements.contractLoadStatus.textContent = error.message || 'Errore caricamento.';
+    setStatus(elements.contractLoadStatus.textContent, 'danger');
+  }
+}
+
+async function deleteContractFromCloud(id) {
+  const confirmed = window.confirm('Vuoi eliminare questo contratto salvato?');
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    elements.contractLoadStatus.textContent = 'Eliminazione...';
+    const response = await fetch(`/api/contracts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!response.ok && response.status !== 204) {
+      const body = await safeJson(response);
+      throw new Error(body?.error || 'Errore eliminazione contratto.');
+    }
+    state.contractsCache = state.contractsCache.filter((item) => item.id !== id);
+    renderContractList(state.contractsCache);
+    elements.contractLoadStatus.textContent = 'Eliminato.';
+    if (state.currentContractId === id) {
+      state.currentContractId = '';
+      state.currentContractName = '';
+    }
+    setStatus('Contratto eliminato.', 'secondary');
+  } catch (error) {
+    elements.contractLoadStatus.textContent = error.message || 'Errore eliminazione.';
+    setStatus(elements.contractLoadStatus.textContent, 'danger');
+  }
+}
+
+function applyContractPayload(row) {
+  const payload = row?.payload || {};
+  const contractType = sanitizeText(row?.contract_type || payload.contractType) || 'pvr-vincitu';
+
+  elements.form.reset();
+  clearValidation();
+  clearSignatureCanvas({ silent: true });
+  state.signatureDataUrl = '';
+
+  elements.contractType.value = contractType;
+  resetTemplateSelection({ silent: true });
+  state.currentTemplateHash = '';
+  state.currentTemplateBytes = null;
+  state.templateMapping = null;
+  state.mappingDraft = null;
+  updateTemplateInfo();
+
+  populateForm(payload);
+  if (payload.signatureDataUrl) {
+    restoreSignature(payload.signatureDataUrl);
+    state.signatureDataUrl = payload.signatureDataUrl;
+    elements.signatureInfo.textContent = 'Firma ripristinata dal contratto salvato.';
+  }
+
+  state.selectedTemplateName = sanitizeText(payload.selectedTemplateName);
+  state.currentStep = clampStep(Number(payload.currentStep) || 0);
+  state.currentContractId = sanitizeText(row.id);
+  state.currentContractName = sanitizeText(row.name);
+
+  updateDocumentUploadsMeta();
+  toggleCriminalFields();
+  resetGeneratedPdf();
+  refreshUi();
+  saveToLocalStorage({ silent: true });
+}
+
+function formatTimestamp(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    return '';
+  }
+  return date.toLocaleString('it-IT');
+}
+
+function generateId() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  const random = Math.random().toString(16).slice(2);
+  return `c_${Date.now().toString(16)}_${random}`;
 }
 
 function handleDocumentUploadsChange() {

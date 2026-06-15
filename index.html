@@ -64,7 +64,7 @@
                   <path d="M8 4.75v5.5h7v-5.5M8.5 16.25h7"></path>
                 </svg>
               </span>
-              <span>Salva dati</span>
+              <span>Salva</span>
             </button>
             <button type="button" class="btn btn-outline-light" id="btnCarica">
               <span class="btn-icon" aria-hidden="true">
@@ -74,7 +74,7 @@
                   <path d="M5.5 18.25h13"></path>
                 </svg>
               </span>
-              <span>Carica dati</span>
+              <span>Carica</span>
             </button>
           </div>
         </div>
@@ -687,6 +687,63 @@
         <div class="modal-footer border-0 pt-0">
           <button type="button" class="btn btn-outline-secondary" id="btnResetMapping">Ripristina default</button>
           <button type="button" class="btn btn-primary" id="btnSaveMapping">Salva mappa</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="contractSaveModal" tabindex="-1" aria-labelledby="contractSaveModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header border-0 pb-0">
+          <div>
+            <div class="eyebrow text-dark mb-2">Contratti</div>
+            <h2 class="h4 mb-1" id="contractSaveModalLabel">Salva contratto</h2>
+            <p class="text-secondary mb-0">Salva questo contratto per ricaricarlo in futuro (cloud).</p>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+        </div>
+        <div class="modal-body pt-3">
+          <div class="surface-panel">
+            <label for="contractSaveName" class="form-label required">Nome salvataggio</label>
+            <input type="text" class="form-control" id="contractSaveName" placeholder="Es. Contratto Rossi 06/2026">
+            <div class="form-text" id="contractSaveHint">Se hai gia caricato un contratto, puoi aggiornarlo oppure salvarne uno nuovo.</div>
+          </div>
+          <div class="small text-secondary mt-3" id="contractSaveStatus">Pronto.</div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Chiudi</button>
+          <button type="button" class="btn btn-outline-primary" id="btnContractSaveUpdate" disabled>Aggiorna</button>
+          <button type="button" class="btn btn-primary" id="btnContractSaveNew">Salva nuovo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="contractLoadModal" tabindex="-1" aria-labelledby="contractLoadModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header border-0 pb-0">
+          <div>
+            <div class="eyebrow text-dark mb-2">Contratti</div>
+            <h2 class="h4 mb-1" id="contractLoadModalLabel">Carica contratto</h2>
+            <p class="text-secondary mb-0">Scegli un contratto salvato da ricaricare nel wizard.</p>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+        </div>
+        <div class="modal-body pt-3">
+          <div class="surface-panel mb-3">
+            <div class="input-group">
+              <span class="input-group-text">Filtro</span>
+              <input type="text" class="form-control" id="contractLoadFilter" placeholder="Cerca per nome...">
+              <button type="button" class="btn btn-outline-secondary" id="btnContractRefresh">Aggiorna</button>
+            </div>
+          </div>
+          <div class="list-group" id="contractLoadList"></div>
+          <div class="small text-secondary mt-3" id="contractLoadStatus">Pronto.</div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Chiudi</button>
         </div>
       </div>
     </div>

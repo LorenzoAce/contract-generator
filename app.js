@@ -198,7 +198,6 @@ const elements = {
   btnSalva: document.getElementById('btnSalva'),
   btnCarica: document.getElementById('btnCarica'),
   btnGenera: document.getElementById('btnGenera'),
-  btnScarica: document.getElementById('btnScarica'),
   btnPulisciFirma: document.getElementById('btnPulisciFirma'),
   btnInserisciFirma: document.getElementById('btnInserisciFirma'),
   btnUsaTemplate: document.getElementById('btnUsaTemplate'),
@@ -251,13 +250,10 @@ function bindEvents() {
   elements.btnSalva.addEventListener('click', openContractSaveModal);
   elements.btnCarica.addEventListener('click', openContractLoadModal);
   elements.btnGenera.addEventListener('click', async () => {
-    await buildPdf();
-  });
-  elements.btnScarica.addEventListener('click', async () => {
-    if (!state.generatedPdfBytes) {
-      await buildPdf();
+    const pdfBytes = await buildPdf();
+    if (pdfBytes) {
+      downloadGeneratedPdf();
     }
-    downloadGeneratedPdf();
   });
   elements.btnPulisciFirma.addEventListener('click', clearSignatureCanvas);
   elements.btnInserisciFirma.addEventListener('click', captureSignature);
@@ -454,10 +450,8 @@ function isCanvasBlank() {
 }
 
 function setDefaultDates() {
-  const today = new Date().toISOString().slice(0, 10);
-  if (!document.getElementById('documentIssueDate').value) {
-    document.getElementById('documentIssueDate').value = today;
-  }
+  // Non precompiliamo date nel wizard: se il campo compare nel PDF
+  // deve arrivare da un input esplicito dell'utente.
 }
 
 function handleNewForm() {
@@ -1666,9 +1660,11 @@ async function buildPdf() {
     const pdfBytes = await fillTemplate(templateBytes, collectFormData());
     setGeneratedPdf(pdfBytes);
     setStatus('PDF generato correttamente.', 'success');
+    return pdfBytes;
   } catch (error) {
     console.error(error);
     setStatus(error.message || 'Errore durante la generazione del PDF.', 'danger');
+    return null;
   }
 }
 
@@ -1766,8 +1762,12 @@ function mapTextValues(data, representativeFullName, operationalCityValue) {
 }
 
 function formatFieldValue(sourceKey, rawValue) {
-  if (sourceKey === 'birthDate' || sourceKey === 'documentIssueDate') {
+  if (sourceKey === 'birthDate') {
     return formatDate(rawValue);
+  }
+
+  if (sourceKey === 'documentIssueDate') {
+    return formatDateShortYear(rawValue);
   }
 
   return sanitizeText(rawValue);
@@ -1786,6 +1786,25 @@ function formatDate(value) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
     const [year, month, day] = normalized.split('-');
     return `${day}/${month}/${year}`;
+  }
+
+  return normalized;
+}
+
+function formatDateShortYear(value) {
+  const normalized = sanitizeText(value);
+  if (!normalized) {
+    return '';
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    const [year, month, day] = normalized.split('-');
+    return `${day}/${month}/${year.slice(-2)}`;
+  }
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(normalized)) {
+    const [day, month, year] = normalized.split('/');
+    return `${day}/${month}/${year.slice(-2)}`;
   }
 
   return normalized;
@@ -1916,7 +1935,6 @@ function loadImageFromDataUrl(dataUrl) {
 
 function setGeneratedPdf(pdfBytes) {
   state.generatedPdfBytes = pdfBytes;
-  elements.btnScarica.disabled = false;
 }
 
 function downloadGeneratedPdf() {
@@ -1938,7 +1956,6 @@ function downloadGeneratedPdf() {
 
 function resetGeneratedPdf() {
   state.generatedPdfBytes = null;
-  elements.btnScarica.disabled = true;
 }
 
 function setStatus(message, tone) {

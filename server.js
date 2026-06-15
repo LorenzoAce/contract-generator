@@ -4,8 +4,11 @@ const {
   checkHealth,
   deleteContract,
   getContract,
+  getPdfTemplate,
   listContracts,
+  listPdfTemplates,
   saveContract,
+  savePdfTemplate,
   getTemplateMapping,
   saveTemplateMapping,
 } = require('./lib/template-mapping-service');
@@ -45,6 +48,54 @@ app.post('/api/template-mappings', async (req, res) => {
     res.json(await saveTemplateMapping(req.body || {}));
   } catch (error) {
     const statusCode = error.message.includes('sono richiesti') ? 400 : error.message.includes('Database non configurato') ? 503 : 500;
+    res.status(statusCode).json({ error: error.message || 'Errore database' });
+  }
+});
+
+app.get('/api/templates', async (req, res) => {
+  try {
+    const items = await listPdfTemplates({ contractType: req.query.contractType });
+    res.json({ items });
+  } catch (error) {
+    const statusCode = error.message.includes('Database non configurato') ? 503 : 500;
+    res.status(statusCode).json({ error: error.message || 'Errore database' });
+  }
+});
+
+app.post('/api/templates', express.raw({ type: '*/*', limit: '25mb' }), async (req, res) => {
+  try {
+    const templateHash = (req.query.templateHash || req.header('x-template-hash') || '').toString();
+    const contractType = (req.query.contractType || '').toString();
+    const templateName = (req.query.templateName || '').toString();
+    const contentType = (req.header('content-type') || 'application/pdf').toString();
+    const bytes = req.body;
+
+    const row = await savePdfTemplate({
+      templateHash,
+      contractType,
+      templateName,
+      contentType,
+      bytes,
+    });
+    res.json(row);
+  } catch (error) {
+    const statusCode = error.message.includes('sono richiesti') ? 400 : error.message.includes('Database non configurato') ? 503 : 500;
+    res.status(statusCode).json({ error: error.message || 'Errore database' });
+  }
+});
+
+app.get('/api/templates/:hash', async (req, res) => {
+  try {
+    const row = await getPdfTemplate({ templateHash: req.params.hash });
+    if (!row) {
+      res.status(404).json({ error: 'Template non trovato' });
+      return;
+    }
+    res.setHeader('Content-Type', row.content_type || 'application/pdf');
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).send(row.bytes);
+  } catch (error) {
+    const statusCode = error.message.endsWith('richiesto') ? 400 : error.message.includes('Database non configurato') ? 503 : 500;
     res.status(statusCode).json({ error: error.message || 'Errore database' });
   }
 });

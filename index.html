@@ -626,9 +626,26 @@
             <div class="form-text">Per ora il contratto `PVR Vincitu` cerca il template nella cartella dedicata `templates/pvr-vincitu`.</div>
             <div class="small text-secondary mt-3" id="templateInfo">Template automatico: in attesa di verifica.</div>
           </div>
+          <div class="surface-panel mt-3">
+            <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center justify-content-between">
+              <div>
+                <div class="form-label mb-1">Template salvati (database)</div>
+                <div class="form-text">Puoi salvare un template PDF nel database e riutilizzarlo senza ricaricare il file.</div>
+              </div>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="btnRefreshSavedTemplates">Aggiorna lista</button>
+            </div>
+            <select class="form-select mt-2" id="savedTemplatesSelect">
+              <option value="">— Nessun template caricato —</option>
+            </select>
+            <div class="d-flex gap-2 mt-2">
+              <button type="button" class="btn btn-outline-primary" id="btnUseSavedTemplate">Usa dal database</button>
+            </div>
+            <div class="small text-secondary mt-2" id="templateDbStatus">Pronto.</div>
+          </div>
         </div>
         <div class="modal-footer border-0 pt-0">
           <button type="button" class="btn btn-outline-secondary" id="btnOpenMapping">Mappa campi</button>
+          <button type="button" class="btn btn-outline-primary" id="btnSaveTemplateToDb">Salva nel database</button>
           <button type="button" class="btn btn-outline-secondary" id="btnResetTemplate">Usa automatico</button>
           <button type="button" class="btn btn-primary" id="btnUsaTemplate" data-bs-dismiss="modal">Usa template selezionato</button>
         </div>

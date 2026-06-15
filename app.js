@@ -150,6 +150,8 @@ const state = {
   currentStep: 0,
   selectedTemplateFile: null,
   selectedTemplateName: '',
+  selectedTemplateSource: 'auto',
+  selectedTemplateDbHash: '',
   currentTemplateHash: '',
   currentTemplateBytes: null,
   templateMapping: null,
@@ -157,6 +159,7 @@ const state = {
   currentContractId: '',
   currentContractName: '',
   contractsCache: [],
+  savedTemplatesCache: [],
   generatedPdfBytes: null,
   signatureDataUrl: '',
   isDrawing: false,
@@ -171,6 +174,11 @@ const elements = {
   statusBox: document.getElementById('statusBox'),
   templateFile: document.getElementById('templateFile'),
   templateInfo: document.getElementById('templateInfo'),
+  btnSaveTemplateToDb: document.getElementById('btnSaveTemplateToDb'),
+  btnRefreshSavedTemplates: document.getElementById('btnRefreshSavedTemplates'),
+  btnUseSavedTemplate: document.getElementById('btnUseSavedTemplate'),
+  savedTemplatesSelect: document.getElementById('savedTemplatesSelect'),
+  templateDbStatus: document.getElementById('templateDbStatus'),
   btnOpenMapping: document.getElementById('btnOpenMapping'),
   mappingModal: document.getElementById('mappingModal'),
   mappingTemplateInfo: document.getElementById('mappingTemplateInfo'),
@@ -238,6 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindEvents();
   setDefaultDates();
   updateTemplateInfo();
+  refreshSavedTemplates({ silentErrors: true });
   updateDocumentUploadsMeta();
   toggleCriminalFields();
   loadFromLocalStorage({ silent: true, notifyIfMissing: false });
@@ -270,6 +279,9 @@ function bindEvents() {
   elements.btnUsaTemplate.addEventListener('click', selectManualTemplate);
   elements.btnResetTemplate.addEventListener('click', resetTemplateSelection);
   elements.templateFile.addEventListener('change', selectManualTemplate);
+  elements.btnSaveTemplateToDb.addEventListener('click', saveCurrentTemplateToDb);
+  elements.btnRefreshSavedTemplates.addEventListener('click', () => refreshSavedTemplates({ silentErrors: false }));
+  elements.btnUseSavedTemplate.addEventListener('click', useSavedTemplateFromDb);
   elements.contractType.addEventListener('change', handleContractTypeChange);
   elements.btnOpenMapping.addEventListener('click', openMappingModal);
   elements.btnSaveMapping.addEventListener('click', saveCurrentMapping);
@@ -359,6 +371,7 @@ function handleContractTypeChange() {
   state.currentContractId = '';
   state.currentContractName = '';
   state.contractsCache = [];
+  state.savedTemplatesCache = [];
   updateTemplateInfo();
   resetGeneratedPdf();
   triggerAutosave();
@@ -522,6 +535,8 @@ function handleNewForm() {
   elements.form.reset();
   state.selectedTemplateFile = null;
   state.selectedTemplateName = '';
+  state.selectedTemplateSource = 'auto';
+  state.selectedTemplateDbHash = '';
   state.currentContractId = '';
   state.currentContractName = '';
   elements.templateFile.value = '';
@@ -553,6 +568,8 @@ function saveToLocalStorage({ silent = false } = {}) {
   payload.signatureDataUrl = state.signatureDataUrl;
   payload.currentStep = state.currentStep;
   payload.selectedTemplateName = state.selectedTemplateName;
+  payload.selectedTemplateSource = state.selectedTemplateSource;
+  payload.selectedTemplateDbHash = state.selectedTemplateDbHash;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   updateAutosaveIndicator('saved');
   if (!silent) {
@@ -580,6 +597,8 @@ function loadFromLocalStorage({ silent = false, notifyIfMissing = true } = {}) {
       clearSignatureCanvas({ silent: true });
     }
     state.selectedTemplateName = sanitizeText(data.selectedTemplateName);
+    state.selectedTemplateSource = sanitizeText(data.selectedTemplateSource) || 'auto';
+    state.selectedTemplateDbHash = sanitizeText(data.selectedTemplateDbHash);
     updateDocumentUploadsMeta();
     toggleCriminalFields();
     clearValidation();
@@ -659,12 +678,17 @@ async function selectManualTemplate() {
   const [file] = elements.templateFile.files;
   if (!file) {
     state.selectedTemplateFile = null;
+    state.selectedTemplateName = '';
+    state.selectedTemplateSource = 'auto';
+    state.selectedTemplateDbHash = '';
     updateTemplateInfo();
     return;
   }
 
   state.selectedTemplateFile = file;
   state.selectedTemplateName = file.name;
+  state.selectedTemplateSource = 'local';
+  state.selectedTemplateDbHash = '';
   updateTemplateInfo();
   triggerAutosave();
   setStatus(`Template selezionato manualmente: ${file.name}`, 'success');
@@ -673,6 +697,8 @@ async function selectManualTemplate() {
 function resetTemplateSelection(options = {}) {
   state.selectedTemplateFile = null;
   state.selectedTemplateName = '';
+  state.selectedTemplateSource = 'auto';
+  state.selectedTemplateDbHash = '';
   elements.templateFile.value = '';
   updateTemplateInfo();
   if (!options.silent) {
@@ -683,12 +709,122 @@ function resetTemplateSelection(options = {}) {
 
 function updateTemplateInfo() {
   const contractConfig = getCurrentContractConfig();
+  if (state.selectedTemplateSource === 'db' && state.selectedTemplateDbHash) {
+    elements.templateInfo.textContent = `Template in uso: ${state.selectedTemplateName || state.selectedTemplateDbHash} (dal database per ${contractConfig.label}).`;
+    return;
+  }
+
   if (state.selectedTemplateFile) {
     elements.templateInfo.textContent = `Template in uso: ${state.selectedTemplateName} (selezione manuale per ${contractConfig.label}).`;
     return;
   }
 
   elements.templateInfo.textContent = `Template automatico da ${contractConfig.directory}: ${contractConfig.templateCandidates.join(', ')}.`;
+}
+
+async function refreshSavedTemplates({ silentErrors } = {}) {
+  if (!elements.savedTemplatesSelect) {
+    return;
+  }
+
+  try {
+    elements.templateDbStatus.textContent = 'Caricamento template dal database...';
+    const params = new URLSearchParams({ contractType: elements.contractType.value });
+    const response = await fetch(`/api/templates?${params}`);
+    if (!response.ok) {
+      const body = await safeJson(response);
+      throw new Error(body?.error || 'Errore caricamento template dal database.');
+    }
+    const data = await response.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+    state.savedTemplatesCache = items;
+
+    if (!items.length) {
+      elements.savedTemplatesSelect.innerHTML = `<option value="">— Nessun template salvato —</option>`;
+      elements.templateDbStatus.textContent = 'Nessun template salvato.';
+      return;
+    }
+
+    elements.savedTemplatesSelect.innerHTML = [
+      `<option value="">— Seleziona un template —</option>`,
+      ...items.map((item) => {
+        const labelParts = [sanitizeText(item.template_name)];
+        const size = item.size ? `${item.size} B` : '';
+        const updated = item.updated_at ? formatTimestamp(item.updated_at) : '';
+        const meta = [size, updated].filter(Boolean).join(' • ');
+        return `<option value="${escapeHtml(item.template_hash)}">${escapeHtml(labelParts.join(''))}${meta ? ` (${escapeHtml(meta)})` : ''}</option>`;
+      }),
+    ].join('');
+    elements.templateDbStatus.textContent = `${items.length} template trovati.`;
+  } catch (error) {
+    elements.templateDbStatus.textContent = error.message || 'Errore caricamento template.';
+    if (!silentErrors) {
+      setStatus(elements.templateDbStatus.textContent, 'danger');
+    }
+    elements.savedTemplatesSelect.innerHTML = `<option value="">— Errore caricamento —</option>`;
+    state.savedTemplatesCache = [];
+  }
+}
+
+function useSavedTemplateFromDb() {
+  const selectedHash = sanitizeText(elements.savedTemplatesSelect.value);
+  if (!selectedHash) {
+    setStatus('Seleziona prima un template salvato dal database.', 'warning');
+    return;
+  }
+
+  const item = (state.savedTemplatesCache || []).find((row) => sanitizeText(row.template_hash) === selectedHash);
+  state.selectedTemplateFile = null;
+  state.selectedTemplateSource = 'db';
+  state.selectedTemplateDbHash = selectedHash;
+  state.selectedTemplateName = sanitizeText(item?.template_name) || selectedHash;
+  updateTemplateInfo();
+  resetGeneratedPdf();
+  triggerAutosave();
+  setStatus(`Template selezionato dal database: ${state.selectedTemplateName}`, 'success');
+}
+
+async function saveCurrentTemplateToDb() {
+  try {
+    elements.templateDbStatus.textContent = 'Preparazione template...';
+    const bytes = await loadTemplateBytes();
+    if (!state.currentTemplateHash) {
+      elements.templateDbStatus.textContent = 'SHA-256 del template non disponibile.';
+      return;
+    }
+    if (state.selectedTemplateSource === 'db' && state.selectedTemplateDbHash === state.currentTemplateHash) {
+      elements.templateDbStatus.textContent = 'Questo template è già in uso dal database.';
+      return;
+    }
+
+    elements.templateDbStatus.textContent = 'Salvataggio template nel database...';
+    const params = new URLSearchParams({
+      templateHash: state.currentTemplateHash,
+      contractType: elements.contractType.value,
+      templateName: state.selectedTemplateName || state.currentTemplateHash,
+    });
+
+    const response = await fetch(`/api/templates?${params}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/pdf',
+        'x-template-hash': state.currentTemplateHash,
+      },
+      body: bytes,
+    });
+
+    if (!response.ok) {
+      const body = await safeJson(response);
+      throw new Error(body?.error || 'Errore salvataggio template nel database.');
+    }
+
+    elements.templateDbStatus.textContent = 'Template salvato.';
+    setStatus('Template PDF salvato nel database.', 'success');
+    await refreshSavedTemplates({ silentErrors: true });
+  } catch (error) {
+    elements.templateDbStatus.textContent = error.message || 'Errore salvataggio template.';
+    setStatus(elements.templateDbStatus.textContent, 'danger');
+  }
 }
 
 function getDefaultTemplateMapping() {
@@ -1103,6 +1239,8 @@ function buildContractPayload() {
   payload.signatureDataUrl = state.signatureDataUrl;
   payload.currentStep = state.currentStep;
   payload.selectedTemplateName = state.selectedTemplateName;
+  payload.selectedTemplateSource = state.selectedTemplateSource;
+  payload.selectedTemplateDbHash = state.selectedTemplateDbHash;
   payload.contractType = elements.contractType.value;
   payload.appVersion = APP_VERSION;
   return payload;
@@ -1291,6 +1429,9 @@ function applyContractPayload(row) {
   }
 
   state.selectedTemplateName = sanitizeText(payload.selectedTemplateName);
+  state.selectedTemplateSource = sanitizeText(payload.selectedTemplateSource) || 'auto';
+  state.selectedTemplateDbHash = sanitizeText(payload.selectedTemplateDbHash);
+  updateTemplateInfo();
   state.currentStep = clampStep(Number(payload.currentStep) || 0);
   state.currentContractId = sanitizeText(row.id);
   state.currentContractName = sanitizeText(row.name);
@@ -1743,6 +1884,16 @@ async function buildPdf() {
 
 async function loadTemplateBytes() {
   const contractConfig = getCurrentContractConfig();
+  if (state.selectedTemplateSource === 'db' && state.selectedTemplateDbHash) {
+    const response = await fetch(`/api/templates/${encodeURIComponent(state.selectedTemplateDbHash)}`);
+    if (!response.ok) {
+      throw new Error('Impossibile leggere il template dal database. Verifica DATABASE_URL o seleziona un PDF locale.');
+    }
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    await setTemplateContext(bytes, state.selectedTemplateName || state.selectedTemplateDbHash);
+    return bytes;
+  }
+
   if (state.selectedTemplateFile) {
     const bytes = new Uint8Array(await state.selectedTemplateFile.arrayBuffer());
     await setTemplateContext(bytes, state.selectedTemplateName || state.selectedTemplateFile.name);

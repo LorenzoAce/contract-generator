@@ -8,7 +8,7 @@
   --success-soft: rgba(25, 135, 84, 0.12);
   --text-strong: #132238;
   --text-muted: #5f6b7a;
-  --app-footer-offset: 2.6rem;
+  --app-footer-offset: 5.2rem;
 }
 
 body.app-shell {
@@ -27,21 +27,21 @@ body.app-shell {
   right: 0;
   bottom: 0;
   z-index: 1025;
-  padding: 0.085rem 0;
+  padding: 0.45rem 0;
   background: #111827;
   border-top: 1px solid var(--card-border);
 }
 
 .app-footer .small {
   color: #e5e7eb;
-  font-size: 0.68rem;
-  line-height: 1.12;
+  font-size: 0.78rem;
+  line-height: 1.2;
 }
 
 .app-footer .btn {
   white-space: nowrap;
-  padding: 0.15rem 0.55rem;
-  font-size: 0.68rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.78rem;
   line-height: 1;
 }
 
@@ -74,13 +74,13 @@ body.app-shell {
 .app-footer__logo {
   display: flex;
   justify-content: center;
-  margin-top: 0.05rem;
+  margin-top: 0.25rem;
 }
 
 .footer-logo {
   width: auto;
-  max-width: 150px;
-  max-height: 27px;
+  max-width: 240px;
+  max-height: 44px;
   height: auto;
   object-fit: contain;
 }

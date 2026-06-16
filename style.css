@@ -75,6 +75,10 @@ body.app-shell {
   margin-top: 0.25rem;
 }
 
+.app-footer__bottom {
+  margin-top: 0.65rem;
+}
+
 .footer-logo {
   width: auto;
   max-width: 260px;

@@ -237,6 +237,8 @@ const elements = {
   criminalTribunal2: document.getElementById('criminalTribunal2'),
   criminalRecordNotes: document.getElementById('criminalRecordNotes'),
   pendingChargesNotes: document.getElementById('pendingChargesNotes'),
+  btnFooterDemo: document.getElementById('btnFooterDemo'),
+  btnFooterWhatsapp: document.getElementById('btnFooterWhatsapp'),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -264,6 +266,12 @@ function bindEvents() {
   elements.btnNuovo.addEventListener('click', handleNewForm);
   elements.btnSalva.addEventListener('click', openContractSaveModal);
   elements.btnCarica.addEventListener('click', openContractLoadModal);
+  if (elements.btnFooterDemo) {
+    elements.btnFooterDemo.addEventListener('click', handleFooterDemoRequest);
+  }
+  if (elements.btnFooterWhatsapp) {
+    elements.btnFooterWhatsapp.addEventListener('click', handleFooterWhatsappRequest);
+  }
   elements.btnGenera.addEventListener('click', async () => {
     const pdfBytes = await buildPdf();
     if (pdfBytes) {
@@ -321,6 +329,14 @@ function bindEvents() {
 
   elements.form.addEventListener('input', handleFormInteraction);
   elements.form.addEventListener('change', handleFormInteraction);
+}
+
+function handleFooterDemoRequest() {
+  setStatus('Richiesta demo: contatto non configurato.', 'secondary');
+}
+
+function handleFooterWhatsappRequest() {
+  setStatus('Richiesta WhatsApp: contatto non configurato.', 'secondary');
 }
 
 function renderStepper() {

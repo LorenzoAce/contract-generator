@@ -8,7 +8,7 @@
   --success-soft: rgba(25, 135, 84, 0.12);
   --text-strong: #132238;
   --text-muted: #5f6b7a;
-  --app-footer-offset: 5.2rem;
+  --app-footer-offset: 7.5rem;
 }
 
 body.app-shell {
@@ -27,7 +27,7 @@ body.app-shell {
   right: 0;
   bottom: 0;
   z-index: 1025;
-  padding: 0.45rem 0;
+  padding: 1rem 0;
   background: #111827;
   border-top: 1px solid var(--card-border);
 }
@@ -36,24 +36,6 @@ body.app-shell {
   color: #e5e7eb;
   font-size: 0.9rem;
   line-height: 1.2;
-}
-
-.app-footer .btn {
-  white-space: nowrap;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.9rem;
-  line-height: 1;
-}
-
-.app-footer .btn.btn-primary {
-  background-color: #0f172a;
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
-.app-footer .btn.btn-primary:hover,
-.app-footer .btn.btn-primary:focus {
-  background-color: #111827;
-  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .app-footer .btn-icon svg {
@@ -71,6 +53,22 @@ body.app-shell {
   margin-top: 0;
 }
 
+.app-footer__copyright {
+  color: #d1d5db;
+}
+
+.app-footer__beta {
+  color: #60a5fa;
+}
+
+.app-footer__collab {
+  color: #9ca3af;
+}
+
+.app-footer__cta {
+  color: #d1d5db;
+}
+
 .app-footer__logo {
   display: flex;
   justify-content: center;
@@ -79,10 +77,59 @@ body.app-shell {
 
 .footer-logo {
   width: auto;
-  max-width: 240px;
-  max-height: 44px;
+  max-width: 260px;
+  max-height: 72px;
   height: auto;
   object-fit: contain;
+}
+
+.footer-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: transparent;
+  border-width: 1px;
+  border-style: solid;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.footer-action-btn--demo {
+  border-color: #60a5fa;
+  color: #60a5fa;
+}
+
+.footer-action-btn--demo:hover,
+.footer-action-btn--demo:focus {
+  background-color: #60a5fa;
+  color: #111827;
+}
+
+.footer-action-btn--whatsapp {
+  border-color: #22c55e;
+  color: #4ade80;
+}
+
+.footer-action-btn--whatsapp:hover,
+.footer-action-btn--whatsapp:focus {
+  background-color: #22c55e;
+  color: #111827;
+}
+
+.footer-action-btn .btn-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.footer-action-btn .btn-icon path {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .wizard-footer {

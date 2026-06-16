@@ -30,6 +30,8 @@ body.app-shell {
   padding: 0.75rem 0;
   background: #111827;
   border-top: 1px solid var(--card-border);
+  display: flex;
+  align-items: center;
 }
 
 .app-footer .small {
@@ -72,6 +74,7 @@ body.app-shell {
 .app-footer__top {
   position: relative;
   width: 100%;
+  margin: 0 auto;
 }
 
 @media (min-width: 768px) {
@@ -85,10 +88,15 @@ body.app-shell {
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
   }
 
   .app-footer__actions {
     margin-left: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
 }
 
@@ -100,6 +108,9 @@ body.app-shell {
 
 .app-footer__bottom {
   margin-top: 0.4rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .footer-logo {

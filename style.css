@@ -59,6 +59,10 @@ body.app-shell {
   color: #d1d5db;
 }
 
+.app-footer__left {
+  width: 100%;
+}
+
 .app-footer__beta {
   color: #60a5fa;
 }
@@ -81,6 +85,13 @@ body.app-shell {
   .app-footer__top {
     display: flex;
     align-items: center;
+  }
+
+  .app-footer__left {
+    display: flex;
+    align-items: center;
+    width: auto;
+    max-width: 32%;
   }
 
   .app-footer__collab {
@@ -112,13 +123,6 @@ body.app-shell {
   display: flex;
   justify-content: center;
   margin-top: 0.25rem;
-}
-
-.app-footer__bottom {
-  margin-top: 0.4rem;
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
 .footer-logo {

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.09';
+const APP_VERSION = '1.10';
 const CONTRACT_TEMPLATES = {
   'pvr-vincitu': {
     label: 'PVR Vincitu',
@@ -257,7 +257,7 @@ function renderAppVersion() {
   if (elements.appVersion) {
     elements.appVersion.textContent = APP_VERSION;
   }
-  document.title = `Contract Manager ${APP_VERSION}`;
+  document.title = `Contract Generator ${APP_VERSION}`;
 }
 
 function bindEvents() {

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.08';
+const APP_VERSION = '1.09';
 const CONTRACT_TEMPLATES = {
   'pvr-vincitu': {
     label: 'PVR Vincitu',
@@ -1921,8 +1921,9 @@ async function loadTemplateBytes() {
 }
 
 async function fillTemplate(templateBytes, data) {
-  const { PDFDocument } = window.PDFLib;
+  const { PDFDocument, StandardFonts } = window.PDFLib;
   const pdfDoc = await PDFDocument.load(templateBytes);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const form = pdfDoc.getForm();
   const fields = new Map(form.getFields().map((field) => [field.getName(), field]));
 
@@ -1968,12 +1969,12 @@ async function fillTemplate(templateBytes, data) {
     const value = Object.prototype.hasOwnProperty.call(computedValues, sourceKey)
       ? computedValues[sourceKey]
       : formatFieldValue(sourceKey, data[sourceKey]);
-    field.setText(value);
+    setTextWithAutoFit(field, value, font);
   });
 
   if (issueDateValue) {
     issueDateTargets.forEach((fieldName) => {
-      setIssueDateField(fields, fieldName, issueDateValue);
+      setIssueDateField(fields, fieldName, issueDateValue, font);
     });
   }
 
@@ -2056,7 +2057,7 @@ function formatDateShortYear(value) {
   return normalized;
 }
 
-function setIssueDateField(fields, fieldName, fullDateValue) {
+function setIssueDateField(fields, fieldName, fullDateValue, font) {
   const trimmedName = sanitizeText(fieldName);
   if (!trimmedName) {
     return;
@@ -2067,14 +2068,16 @@ function setIssueDateField(fields, fieldName, fullDateValue) {
     return;
   }
 
+  const primaryValue = fullDateValue;
+  const shortValue = formatDateShortYear(fullDateValue);
   const minWidgetWidth = getMinWidgetWidth(field);
-  if (typeof field.setFontSize === 'function') {
-    const fontSize = minWidgetWidth && minWidgetWidth < 70 ? 7 : minWidgetWidth && minWidgetWidth < 90 ? 9 : 10;
-    field.setFontSize(fontSize);
-  }
 
-  const valueToSet = minWidgetWidth && minWidgetWidth < 60 ? formatDateShortYear(fullDateValue) : fullDateValue;
-  field.setText(valueToSet);
+  const preferredValue = minWidgetWidth && minWidgetWidth < 60 ? shortValue : primaryValue;
+  const fallbackValue = preferredValue === primaryValue ? shortValue : primaryValue;
+  const applied = setTextWithAutoFit(field, preferredValue, font, { minFontSize: 7, maxFontSize: 10, allowTruncate: false });
+  if (!applied && fallbackValue && fallbackValue !== preferredValue) {
+    setTextWithAutoFit(field, fallbackValue, font, { minFontSize: 7, maxFontSize: 10, allowTruncate: false });
+  }
 }
 
 function getMinWidgetWidth(field) {
@@ -2091,6 +2094,54 @@ function getMinWidgetWidth(field) {
   } catch (error) {
     return null;
   }
+}
+
+function setTextWithAutoFit(field, value, font, options = {}) {
+  const text = sanitizeText(value);
+  if (!text) {
+    field.setText('');
+    return true;
+  }
+
+  const maxFontSize = Number.isFinite(options.maxFontSize) ? options.maxFontSize : 10;
+  const minFontSize = Number.isFinite(options.minFontSize) ? options.minFontSize : 7;
+  const allowTruncate = options.allowTruncate !== false;
+  const minWidgetWidth = getMinWidgetWidth(field);
+  const usableWidth = typeof minWidgetWidth === 'number' ? Math.max(0, minWidgetWidth - 3) : null;
+
+  if (!usableWidth || !font || typeof font.widthOfTextAtSize !== 'function' || typeof field.setFontSize !== 'function') {
+    field.setText(text);
+    if (font && typeof field.updateAppearances === 'function') {
+      field.updateAppearances(font);
+    }
+    return true;
+  }
+
+  let chosenSize = maxFontSize;
+  while (chosenSize > minFontSize && font.widthOfTextAtSize(text, chosenSize) > usableWidth) {
+    chosenSize -= 0.5;
+  }
+
+  let finalText = text;
+  if (font.widthOfTextAtSize(finalText, chosenSize) > usableWidth) {
+    if (!allowTruncate) {
+      return false;
+    }
+    const ellipsis = '…';
+    let trimmed = finalText;
+    while (trimmed.length > 0 && font.widthOfTextAtSize(`${trimmed}${ellipsis}`, minFontSize) > usableWidth) {
+      trimmed = trimmed.slice(0, -1);
+    }
+    finalText = trimmed ? `${trimmed}${ellipsis}` : '';
+    chosenSize = minFontSize;
+  }
+
+  field.setFontSize(chosenSize);
+  field.setText(finalText);
+  if (typeof field.updateAppearances === 'function') {
+    field.updateAppearances(font);
+  }
+  return true;
 }
 
 function buildPlaceAndDate(data) {

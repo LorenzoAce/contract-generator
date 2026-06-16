@@ -28,7 +28,7 @@
             </svg>
           </div>
           <div class="brand-copy">
-            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.11</span></h1>
+            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.12</span></h1>
             <p class="hero-copy mb-0">Compilazione guidata del contratto e degli allegati in pochi passaggi.</p>
           </div>
         </div>
@@ -79,10 +79,6 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <div class="alert alert-info shadow-sm mb-4" id="statusBox">
-      Compila i passaggi del wizard. Il template PDF viene rilevato automaticamente nella cartella del contratto selezionato oppure puo essere scelto manualmente.
     </div>
 
     <div class="row g-4 justify-content-center align-items-start">
@@ -796,12 +792,11 @@
       <div class="d-flex flex-column flex-md-row justify-content-between align-items-center align-items-md-stretch gap-3">
         <div class="d-flex flex-column align-items-center align-items-md-start gap-1 text-center text-md-start flex-fill">
           <div class="small app-footer__copyright">&copy; 2026 GeoBet Analyzer by Desa Service S.r.l.s. Tutti i diritti riservati.</div>
-          <div class="small fw-semibold app-footer__beta">Beta version 2.13</div>
         </div>
 
         <div class="d-flex flex-column align-items-center justify-content-center text-center flex-fill app-footer__collab">
-          <div class="small">In collaborazione con</div>
-          <div class="app-footer__logo">
+          <div class="d-flex align-items-center justify-content-center gap-2 flex-wrap">
+            <span class="small">In collaborazione con</span>
             <img class="footer-logo" src="./assets/logos/logo-pvrfacile.png" alt="PVR Facile">
           </div>
         </div>
@@ -809,7 +804,7 @@
         <div class="text-center text-md-end flex-fill">
           <p class="small app-footer__cta mb-2">Vuoi capire se quest&#39;app &egrave; utile per la tua azienda?</p>
           <div class="d-flex flex-column flex-sm-row gap-2 justify-content-center justify-content-md-end">
-            <button type="button" class="btn btn-sm footer-action-btn footer-action-btn--demo" id="btnFooterDemo">
+            <a class="btn btn-sm footer-action-btn footer-action-btn--demo" href="mailto:info@pvrfacile.it?subject=Richiesta%20demo" rel="noopener">
               <span class="btn-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" focusable="false">
                   <path d="M4.75 8.5A2.25 2.25 0 0 1 7 6.25h10A2.25 2.25 0 0 1 19.25 8.5v7A2.25 2.25 0 0 1 17 17.75H7A2.25 2.25 0 0 1 4.75 15.5v-7Z"></path>
@@ -817,8 +812,8 @@
                 </svg>
               </span>
               <span>Richiedi una demo</span>
-            </button>
-            <button type="button" class="btn btn-sm footer-action-btn footer-action-btn--whatsapp" id="btnFooterWhatsapp">
+            </a>
+            <a class="btn btn-sm footer-action-btn footer-action-btn--whatsapp" href="https://wa.me/393519519583" target="_blank" rel="noopener">
               <span class="btn-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" focusable="false">
                   <path d="M7 7.75h10A2.25 2.25 0 0 1 19.25 10v4A2.25 2.25 0 0 1 17 16.25H11l-3.3 2.6c-.73.58-1.8.06-1.8-.88v-1.72A2.25 2.25 0 0 1 4.75 14v-4A2.25 2.25 0 0 1 7 7.75Z"></path>
@@ -827,7 +822,7 @@
                 </svg>
               </span>
               <span>WhatsApp</span>
-            </button>
+            </a>
           </div>
         </div>
       </div>

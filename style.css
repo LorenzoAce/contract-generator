@@ -97,6 +97,14 @@ body.app-shell {
     display: flex;
     flex-direction: column;
     justify-content: center;
+    align-items: flex-end;
+  }
+
+  .app-footer__cta {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    margin-bottom: 0.35rem !important;
   }
 }
 

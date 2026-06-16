@@ -40,6 +40,21 @@ body.app-shell {
   white-space: nowrap;
 }
 
+.app-footer__beta {
+  margin-top: 0.15rem;
+}
+
+.app-footer__logo {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.35rem;
+}
+
+.footer-logo {
+  width: min(360px, 100%);
+  height: auto;
+}
+
 .hero-card,
 .wizard-shell,
 .step-card,

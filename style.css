@@ -12,7 +12,7 @@
 
 body.app-shell {
   min-height: 100vh;
-  padding-bottom: 3.25rem;
+  padding-bottom: 1.625rem;
   background:
     radial-gradient(circle at top left, rgba(13, 110, 253, 0.12), transparent 26%),
     radial-gradient(circle at top right, rgba(32, 201, 151, 0.10), transparent 20%),
@@ -26,7 +26,7 @@ body.app-shell {
   right: 0;
   bottom: 0;
   z-index: 1025;
-  padding: 0.375rem 0;
+  padding: 0.1875rem 0;
   background: #111827;
   border-top: 1px solid var(--card-border);
 }
@@ -62,13 +62,13 @@ body.app-shell {
 }
 
 .app-footer__beta {
-  margin-top: 0.15rem;
+  margin-top: 0.05rem;
 }
 
 .app-footer__logo {
   display: flex;
   justify-content: center;
-  margin-top: 0.35rem;
+  margin-top: 0.15rem;
 }
 
 .footer-logo {

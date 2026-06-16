@@ -353,12 +353,57 @@ function handleFormInteraction(event) {
   }
 
   if (target.matches('input, textarea, select')) {
+    if (target.name === 'salesContact' || target.name === 'presentedBy') {
+      syncPresentedByFields({ sourceName: target.name });
+    }
     validateRelatedField(target, { silent: true });
     if (target.type !== 'file') {
       resetGeneratedPdf();
     }
     triggerAutosave();
     refreshUi();
+  }
+}
+
+function syncPresentedByFields({ sourceName } = {}) {
+  const salesField = elements.form.querySelector('[name="salesContact"]');
+  const presentedField = elements.form.querySelector('[name="presentedBy"]');
+  if (!salesField || !presentedField) {
+    return;
+  }
+
+  const salesValue = salesField.value ?? '';
+  const presentedValue = presentedField.value ?? '';
+
+  if (sourceName === 'salesContact') {
+    if (presentedValue !== salesValue) {
+      presentedField.value = salesValue;
+    }
+    return;
+  }
+
+  if (sourceName === 'presentedBy') {
+    if (salesValue !== presentedValue) {
+      salesField.value = presentedValue;
+    }
+    return;
+  }
+
+  const trimmedSales = sanitizeText(salesValue);
+  const trimmedPresented = sanitizeText(presentedValue);
+
+  if (trimmedSales && !trimmedPresented) {
+    presentedField.value = salesValue;
+    return;
+  }
+
+  if (!trimmedSales && trimmedPresented) {
+    salesField.value = presentedValue;
+    return;
+  }
+
+  if (trimmedSales && trimmedPresented && salesValue !== presentedValue) {
+    presentedField.value = salesValue;
   }
 }
 
@@ -1513,6 +1558,7 @@ function scrollWizardTop() {
 }
 
 function refreshUi() {
+  syncPresentedByFields();
   updateWizardUi();
   updateStepVisibility();
   updateReviewSummaries();

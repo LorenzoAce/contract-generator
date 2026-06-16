@@ -549,6 +549,11 @@
                       <label class="form-label required d-block">Disegna firma</label>
                       <canvas id="signatureCanvas" width="900" height="260" class="signature-canvas"></canvas>
                       <div class="invalid-feedback d-block" id="signatureError"></div>
+                      <div class="surface-panel mt-3">
+                        <div class="section-heading">Presentato da</div>
+                        <input type="text" class="form-control" id="presentedBy" name="presentedBy" placeholder="Es. Nome e Cognome">
+                        <div class="form-text">Viene riportato nel PDF nel campo agente-commerciale.</div>
+                      </div>
                     </div>
                     <div class="col-lg-4">
                       <div class="surface-panel h-100">
@@ -556,8 +561,6 @@
                         <label for="placeAndDate" class="form-label">Luogo e data firma</label>
                         <input type="text" class="form-control mb-3" id="placeAndDate" name="placeAndDate" placeholder="Es. Milano, 13/06/2026">
                         <div class="form-text mb-4">Se lasciato vuoto, il campo restera vuoto anche nel PDF generato.</div>
-                        <label for="presentedBy" class="form-label">Presentato da</label>
-                        <input type="text" class="form-control mb-3" id="presentedBy" name="presentedBy" placeholder="Es. Nome e Cognome">
                         <input type="file" class="form-control d-none" id="signatureUpload" accept="image/*">
                         <div class="d-grid gap-2">
                           <button type="button" class="btn btn-outline-primary" id="btnCaricaFirma">Carica immagine firma</button>

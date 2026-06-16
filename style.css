@@ -34,14 +34,14 @@ body.app-shell {
 
 .app-footer .small {
   color: #e5e7eb;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   line-height: 1.2;
 }
 
 .app-footer .btn {
   white-space: nowrap;
   padding: 0.25rem 0.75rem;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   line-height: 1;
 }
 

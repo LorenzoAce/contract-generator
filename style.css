@@ -12,7 +12,7 @@
 
 body.app-shell {
   min-height: 100vh;
-  padding-bottom: 6.5rem;
+  padding-bottom: 3.25rem;
   background:
     radial-gradient(circle at top left, rgba(13, 110, 253, 0.12), transparent 26%),
     radial-gradient(circle at top right, rgba(32, 201, 151, 0.10), transparent 20%),
@@ -26,18 +26,39 @@ body.app-shell {
   right: 0;
   bottom: 0;
   z-index: 1025;
-  padding: 0.75rem 0;
-  background: rgba(255, 255, 255, 0.86);
+  padding: 0.375rem 0;
+  background: #111827;
   border-top: 1px solid var(--card-border);
-  backdrop-filter: blur(10px);
 }
 
 .app-footer .small {
-  color: var(--text-strong);
+  color: #e5e7eb;
 }
 
 .app-footer .btn {
   white-space: nowrap;
+}
+
+.app-footer .btn.btn-primary {
+  background-color: #0f172a;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.app-footer .btn.btn-primary:hover,
+.app-footer .btn.btn-primary:focus {
+  background-color: #111827;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.app-footer .btn-icon svg {
+  stroke: currentColor;
+}
+
+.app-footer .btn-icon path {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .app-footer__beta {
@@ -51,7 +72,7 @@ body.app-shell {
 }
 
 .footer-logo {
-  width: min(360px, 100%);
+  width: min(240px, 100%);
   height: auto;
 }
 

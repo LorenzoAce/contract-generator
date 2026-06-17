@@ -356,6 +356,9 @@ function handleFormInteraction(event) {
     if (target.name === 'salesContact' || target.name === 'presentedBy') {
       syncPresentedByFields({ sourceName: target.name });
     }
+    if (target.name === 'operationalSameAsLegal' || isCompanyLegalField(target.name)) {
+      syncOperationalAddressFields({ sourceName: target.name });
+    }
     validateRelatedField(target, { silent: true });
     if (target.type !== 'file') {
       resetGeneratedPdf();
@@ -405,6 +408,59 @@ function syncPresentedByFields({ sourceName } = {}) {
   if (trimmedSales && trimmedPresented && salesValue !== presentedValue) {
     presentedField.value = salesValue;
   }
+}
+
+function isCompanyLegalField(fieldName) {
+  return [
+    'legalStreet',
+    'legalNumber',
+    'legalCap',
+    'legalCity',
+    'legalProvince',
+  ].includes(fieldName);
+}
+
+function syncOperationalAddressFields() {
+  const checkbox = document.getElementById('operationalSameAsLegal');
+  if (!checkbox) {
+    return;
+  }
+
+  const operationalFields = [
+    'operationalStreet',
+    'operationalNumber',
+    'operationalCap',
+    'operationalCity',
+    'operationalProvince',
+  ].map((name) => elements.form.querySelector(`[name="${CSS.escape(name)}"]`)).filter(Boolean);
+
+  const locked = checkbox.checked;
+  operationalFields.forEach((field) => {
+    field.readOnly = locked;
+    field.classList.toggle('is-readonly', locked);
+  });
+
+  if (!locked) {
+    return;
+  }
+
+  [
+    ['legalStreet', 'operationalStreet'],
+    ['legalNumber', 'operationalNumber'],
+    ['legalCap', 'operationalCap'],
+    ['legalCity', 'operationalCity'],
+    ['legalProvince', 'operationalProvince'],
+  ].forEach(([legalName, operationalName]) => {
+    const legalField = elements.form.querySelector(`[name="${CSS.escape(legalName)}"]`);
+    const operationalField = elements.form.querySelector(`[name="${CSS.escape(operationalName)}"]`);
+    if (!legalField || !operationalField) {
+      return;
+    }
+    if (operationalField.value !== legalField.value) {
+      operationalField.value = legalField.value;
+      clearInvalid(operationalField);
+    }
+  });
 }
 
 function handleContractTypeChange() {
@@ -1554,11 +1610,12 @@ function clampStep(stepIndex) {
 }
 
 function scrollWizardTop() {
-  elements.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function refreshUi() {
   syncPresentedByFields();
+  syncOperationalAddressFields();
   updateWizardUi();
   updateStepVisibility();
   updateReviewSummaries();

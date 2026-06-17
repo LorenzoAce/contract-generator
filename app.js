@@ -251,6 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
   toggleCriminalFields();
   loadFromLocalStorage({ silent: true, notifyIfMissing: false });
   refreshUi();
+  setupFooterOffsetSync();
 });
 
 function renderAppVersion() {
@@ -321,6 +322,58 @@ function bindEvents() {
 
   elements.form.addEventListener('input', handleFormInteraction);
   elements.form.addEventListener('change', handleFormInteraction);
+}
+
+function setupFooterOffsetSync() {
+  const footer = document.querySelector('.app-footer');
+  if (!footer) {
+    return;
+  }
+
+  const collapse = document.getElementById('mobileFooterCollapse');
+  const media = window.matchMedia('(max-width: 767.98px)');
+
+  const applyOffset = () => {
+    if (!media.matches) {
+      document.documentElement.style.removeProperty('--app-footer-offset');
+      return;
+    }
+    const height = Math.max(0, Math.round(footer.getBoundingClientRect().height));
+    if (height) {
+      document.documentElement.style.setProperty('--app-footer-offset', `${height}px`);
+    }
+  };
+
+  const animateOffset = () => {
+    const start = performance.now();
+    const duration = 450;
+    const tick = () => {
+      applyOffset();
+      if (performance.now() - start < duration) {
+        requestAnimationFrame(tick);
+      }
+    };
+    requestAnimationFrame(tick);
+  };
+
+  if (collapse) {
+    collapse.addEventListener('show.bs.collapse', animateOffset);
+    collapse.addEventListener('shown.bs.collapse', applyOffset);
+    collapse.addEventListener('hide.bs.collapse', animateOffset);
+    collapse.addEventListener('hidden.bs.collapse', applyOffset);
+  }
+
+  window.addEventListener('resize', () => requestAnimationFrame(applyOffset));
+
+  if (typeof media.addEventListener === 'function') {
+    media.addEventListener('change', applyOffset);
+  } else if (typeof media.addListener === 'function') {
+    media.addListener(applyOffset);
+  }
+
+  applyOffset();
+  setTimeout(applyOffset, 0);
+  setTimeout(applyOffset, 200);
 }
 
 function renderStepper() {

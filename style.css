@@ -13,7 +13,7 @@
 
 body.app-shell {
   min-height: 100vh;
-  padding-bottom: var(--app-footer-offset);
+  padding-bottom: calc(var(--app-footer-offset) + env(safe-area-inset-bottom, 0px));
   background:
     radial-gradient(circle at top left, rgba(13, 110, 253, 0.12), transparent 26%),
     radial-gradient(circle at top right, rgba(32, 201, 151, 0.10), transparent 20%),
@@ -79,6 +79,42 @@ body.app-shell {
   position: relative;
   width: 100%;
   margin: 0 auto;
+}
+
+.mobile-footer__bar {
+  display: none;
+  width: 100%;
+}
+
+.mobile-footer__toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+}
+
+.mobile-footer__label {
+  color: #e5e7eb;
+  font-weight: 700;
+}
+
+.mobile-footer__icon svg {
+  transition: transform 0.18s ease;
+}
+
+.mobile-footer__toggle[aria-expanded="true"] .mobile-footer__icon svg {
+  transform: rotate(180deg);
+}
+
+@media (min-width: 768px) {
+  .mobile-footer__collapse {
+    display: block !important;
+    height: auto !important;
+    visibility: visible !important;
+  }
 }
 
 @media (min-width: 768px) {
@@ -978,6 +1014,25 @@ textarea.form-control {
 }
 
 @media (max-width: 767.98px) {
+  :root {
+    --app-footer-offset: 3.25rem;
+  }
+
+  .app-footer {
+    z-index: 1023;
+    padding: 0.5rem 0;
+  }
+
+  .mobile-footer__bar {
+    display: block;
+  }
+
+  .mobile-footer__collapse {
+    margin-top: 0.6rem;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+
   .hero-card,
   .wizard-shell,
   .step-card__header,
@@ -985,6 +1040,18 @@ textarea.form-control {
   .wizard-footer {
     padding-left: 1rem;
     padding-right: 1rem;
+  }
+
+  #contractForm > .vstack {
+    padding-bottom: calc(var(--app-footer-offset) + 5.75rem);
+  }
+
+  .wizard-footer {
+    position: fixed;
+    left: 1rem;
+    right: 1rem;
+    bottom: calc(var(--app-footer-offset) + env(safe-area-inset-bottom, 0px));
+    z-index: 1024;
   }
 
   .app-header {

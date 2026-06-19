@@ -27,7 +27,7 @@
               <path d="M27 34h12M27 41h12" fill="none" stroke="#6f42c1" stroke-width="4" stroke-linecap="round"></path>
             </svg>
           </div><div class="brand-copy">
-            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.23</span></h1>
+            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.24</span></h1>
             <p class="hero-copy mb-0">Compilazione guidata del contratto e degli allegati in pochi passaggi.</p>
           </div>
         </div>
@@ -49,9 +49,12 @@
             </button>
             <div class="dropdown-menu dropdown-menu-end header-menu__list">
               <button type="button" class="dropdown-item" id="btnNuovo">Reset</button>
-              <button type="button" class="dropdown-item" id="btnImportContractPdf" data-bs-toggle="modal" data-bs-target="#importContractModal">Importa Contratto PDF</button>
               <button type="button" class="dropdown-item" id="btnSalva">Salva</button>
               <button type="button" class="dropdown-item" id="btnCarica">Carica</button>
+              <div class="dropdown-divider"></div>
+              <div class="dropdown-header">Contratti Importati</div>
+              <button type="button" class="dropdown-item" id="btnImportContractPdf" data-bs-toggle="modal" data-bs-target="#importContractModal">Importa Contratto PDF</button>
+              <button type="button" class="dropdown-item" id="btnManageImportedContracts">Gestisci Contratti Importati</button>
             </div>
           </div>
         </div>
@@ -635,6 +638,12 @@
                   <button type="button" class="btn btn-outline-primary" id="btnReanalyzeImportContract">Rianalizza PDF</button>
                 </div>
 
+                <label for="importContractSignatureField" class="form-label mt-3">Campo firma</label>
+                <select class="form-select" id="importContractSignatureField">
+                  <option value="">Nessun campo firma selezionato</option>
+                </select>
+                <div class="form-text">Seleziona il campo del PDF che deve ricevere la firma grafica nel wizard e nel PDF finale.</div>
+
                 <div class="small text-secondary mt-3" id="importContractStatus">Seleziona un PDF per iniziare.</div>
 
                 <div class="import-contract-summary mt-3" id="importContractSummary">
@@ -742,6 +751,35 @@
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Chiudi</button>
           <button type="button" class="btn btn-outline-primary" id="btnContractSaveUpdate" disabled>Aggiorna</button>
           <button type="button" class="btn btn-primary" id="btnContractSaveNew">Salva nuovo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="importedContractsManagerModal" tabindex="-1" aria-labelledby="importedContractsManagerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header border-0 pb-0">
+          <div>
+            <div class="eyebrow text-dark mb-2">Contratti PDF</div>
+            <h2 class="h4 mb-1" id="importedContractsManagerModalLabel">Gestisci Contratti Importati</h2>
+            <p class="text-secondary mb-0">Apri un contratto PDF già importato per modificare campi, categorie, descrizioni e configurazione firma.</p>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+        </div>
+        <div class="modal-body pt-3">
+          <div class="surface-panel mb-3">
+            <div class="input-group">
+              <span class="input-group-text">Filtro</span>
+              <input type="text" class="form-control" id="importedContractsManagerFilter" placeholder="Cerca per nome contratto...">
+              <button type="button" class="btn btn-outline-secondary" id="btnRefreshImportedContractsManager">Aggiorna</button>
+            </div>
+          </div>
+          <div class="list-group" id="importedContractsManagerList"></div>
+          <div class="small text-secondary mt-3" id="importedContractsManagerStatus">Pronto.</div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Chiudi</button>
         </div>
       </div>
     </div>

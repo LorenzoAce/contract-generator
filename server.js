@@ -1,8 +1,15 @@
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
+
+loadEnvFile(path.join(__dirname, '.env'));
+loadEnvFile(path.join(__dirname, '.env.local'));
+
+const blobClientTokenHandler = require('./api/blob-client-token');
 const {
   checkHealth,
   deleteContract,
+  deleteImportedContractTemplate,
   getContract,
   getImportedContractTemplate,
   getPdfTemplate,
@@ -20,6 +27,10 @@ const PORT = Number(process.env.PORT) || 3000;
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
+
+app.post('/api/blob-client-token', async (req, res) => {
+  await blobClientTokenHandler(req, res);
+});
 
 app.get('/api/health', async (_req, res) => {
   try {
@@ -136,6 +147,16 @@ app.post('/api/imported-contract-templates', async (req, res) => {
   }
 });
 
+app.delete('/api/imported-contract-templates/:id', async (req, res) => {
+  try {
+    await deleteImportedContractTemplate({ id: req.params.id });
+    res.status(204).end();
+  } catch (error) {
+    const statusCode = error.message.endsWith('richiesto') ? 400 : error.message.includes('Database non configurato') ? 503 : 500;
+    res.status(statusCode).json({ error: error.message || 'Errore database' });
+  }
+});
+
 app.get('/api/contracts', async (req, res) => {
   try {
     const items = await listContracts({ contractType: req.query.contractType });
@@ -195,4 +216,38 @@ app.use(express.static(path.join(__dirname), { dotfiles: 'ignore', index: 'index
 app.listen(PORT, () => {
   process.stdout.write(`Server avviato su http://localhost:${PORT}\n`);
 });
+
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return;
+  }
+
+  const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
+
+    const separatorIndex = trimmed.indexOf('=');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    if (!key || Object.prototype.hasOwnProperty.call(process.env, key)) {
+      continue;
+    }
+
+    let value = trimmed.slice(separatorIndex + 1).trim();
+    if (
+      value.length >= 2
+      && ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\'')))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
+}
 

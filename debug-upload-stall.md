@@ -18,6 +18,7 @@ Status: OPEN
 - Evidenza 1: la route entra correttamente e il body viene parsato (`bodyType=blob.generate-client-token`, payload presente).
 - Evidenza 2: prima del fix compariva il warning runtime di Blob su `onUploadCompleted` senza callback URL determinabile.
 - Evidenza 3: dopo la rimozione di `onUploadCompleted`, il warning sparisce; resta solo l'errore atteso `Invalid token parameter` dovuto al token fittizio usato nel test.
+- Evidenza 4: aggiunto un probe esplicito lato client verso `/api/blob-upload` prima dell'upload reale e uno stato di avanzamento percentuale per distinguere fra blocco nel token exchange e blocco nel trasferimento verso Blob.
 
 ## Hypothesis Status
 - H1: Respinta. Il body arriva nel formato atteso.

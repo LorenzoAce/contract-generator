@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.19';
+const APP_VERSION = '1.20';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const CONTRACT_TEMPLATES = {
@@ -890,6 +890,39 @@ function reportUploadDebug(hypothesisId, msg, data) {
 }
 // #endregion
 
+function setImportContractUploadPhase(message) {
+  if (elements.importContractStatus) {
+    elements.importContractStatus.textContent = message;
+  }
+}
+
+function buildBlobUploadClientPayload(draft) {
+  return JSON.stringify({
+    contractType: draft.contractType,
+    templateHash: draft.templateHash,
+    templateName: draft.fileName,
+  });
+}
+
+async function probeBlobUploadRoute(draft) {
+  const pathname = buildImportedContractBlobPath(draft);
+  const response = await fetch('/api/blob-upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'blob.generate-client-token',
+      payload: {
+        pathname,
+        multipart: true,
+        clientPayload: buildBlobUploadClientPayload(draft),
+      },
+    }),
+  });
+
+  const body = await safeJson(response);
+  return { ok: response.ok, status: response.status, body, pathname };
+}
+
 async function uploadImportedContractPdfViaBlob(draft) {
   if (!draft?.sourceFile) {
     throw new Error('File PDF originale non disponibile. Ricarica il contratto e riprova.');
@@ -904,6 +937,22 @@ async function uploadImportedContractPdfViaBlob(draft) {
   }
 
   try {
+    setImportContractUploadPhase('Verifica endpoint upload Blob...');
+    const probe = await probeBlobUploadRoute(draft);
+    // #region debug-point C:blob-client-probe
+    reportUploadDebug('C', 'client upload probe', {
+      ok: probe.ok,
+      status: probe.status,
+      pathname: probe.pathname,
+      responseType: sanitizeText(probe.body?.type),
+      error: sanitizeText(probe.body?.error),
+    });
+    // #endregion
+    if (!probe.ok) {
+      throw new Error(`Endpoint upload Blob non pronto (${probe.status}): ${sanitizeText(probe.body?.error) || 'errore sconosciuto'}`);
+    }
+    setImportContractUploadPhase('Endpoint Blob verificato. Avvio upload diretto...');
+
     // #region debug-point A:blob-client-start
     reportUploadDebug('A', 'client upload start', {
       fileName: draft.fileName,
@@ -916,11 +965,11 @@ async function uploadImportedContractPdfViaBlob(draft) {
       access: 'public',
       handleUploadUrl: '/api/blob-upload',
       multipart: true,
-      clientPayload: JSON.stringify({
-        contractType: draft.contractType,
-        templateHash: draft.templateHash,
-        templateName: draft.fileName,
-      }),
+      clientPayload: buildBlobUploadClientPayload(draft),
+      onUploadProgress: ({ loaded, total, percentage }) => {
+        const resolvedTotal = Number(total) || Number(draft.sourceFile?.size) || 0;
+        setImportContractUploadPhase(`Upload diretto in corso... ${Math.round(Number(percentage) || 0)}% (${loaded}/${resolvedTotal} byte)`);
+      },
     });
 
     // #region debug-point B:blob-client-success
@@ -960,11 +1009,11 @@ async function uploadImportedContractPdfViaBlob(draft) {
 async function persistImportedContractSource(draft) {
   const sourceFile = draft?.sourceFile || null;
   if (shouldUseDirectBlobUpload(sourceFile)) {
-    elements.importContractStatus.textContent = 'Upload diretto del PDF su storage esterno...';
+    setImportContractUploadPhase('Upload diretto del PDF su storage esterno...');
     return uploadImportedContractPdfViaBlob(draft);
   }
 
-  elements.importContractStatus.textContent = 'Salvataggio del PDF originale nel database...';
+  setImportContractUploadPhase('Salvataggio del PDF originale nel database...');
   const params = new URLSearchParams({
     templateHash: draft.templateHash,
     contractType: draft.contractType,

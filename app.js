@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.17';
+const APP_VERSION = '1.18';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const CONTRACT_TEMPLATES = {
@@ -889,6 +889,7 @@ async function uploadImportedContractPdfViaBlob(draft) {
     const blob = await upload(buildImportedContractBlobPath(draft), draft.sourceFile, {
       access: 'public',
       handleUploadUrl: '/api/blob-upload',
+      multipart: true,
       clientPayload: JSON.stringify({
         contractType: draft.contractType,
         templateHash: draft.templateHash,
@@ -908,8 +909,8 @@ async function uploadImportedContractPdfViaBlob(draft) {
   } catch (error) {
     console.error(error);
     const message = sanitizeText(error?.message);
-    if (message.includes('BLOB_READ_WRITE_TOKEN') || message.includes('Blob')) {
-      throw new Error('Vercel Blob non e configurato. Crea uno store Blob e imposta BLOB_READ_WRITE_TOKEN prima di caricare PDF grandi online.');
+    if (message.includes('BLOB_READ_WRITE_TOKEN') || message.includes('BLOB_STORE_ID') || message.includes('Blob')) {
+      throw new Error('Vercel Blob non e configurato correttamente. Verifica BLOB_READ_WRITE_TOKEN e, se presente nel progetto, anche BLOB_STORE_ID.');
     }
     throw new Error(message || 'Errore durante l upload diretto del PDF.');
   }

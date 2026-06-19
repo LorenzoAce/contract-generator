@@ -1,4 +1,5 @@
 const { handleUpload } = require('@vercel/blob/client');
+const MAX_IMPORTED_CONTRACT_SIZE_BYTES = 100 * 1024 * 1024;
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -7,24 +8,38 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+  const blobToken = sanitizeEnv(process.env.BLOB_READ_WRITE_TOKEN);
+  const blobStoreId = sanitizeEnv(process.env.BLOB_STORE_ID);
+
+  if (!blobToken) {
     res.status(503).json({ error: 'Vercel Blob non configurato. Imposta BLOB_READ_WRITE_TOKEN.' });
     return;
   }
 
   try {
+    const requestBody = getRequestJsonBody(req);
     const jsonResponse = await handleUpload({
-      body: req.body,
+      token: blobToken,
+      body: requestBody,
       request: toWebRequest(req),
-      onBeforeGenerateToken: async (pathname) => {
+      onBeforeGenerateToken: async (pathname, clientPayload, multipart) => {
         if (!isAllowedPath(pathname)) {
           throw new Error('Percorso upload non consentito.');
         }
 
+        const payload = parseClientPayload(clientPayload);
         return {
           allowedContentTypes: ['application/pdf'],
+          maximumSizeInBytes: MAX_IMPORTED_CONTRACT_SIZE_BYTES,
           addRandomSuffix: false,
-          tokenPayload: JSON.stringify({ pathname }),
+          tokenPayload: JSON.stringify({
+            pathname,
+            multipart: Boolean(multipart),
+            contractType: payload.contractType || '',
+            templateHash: payload.templateHash || '',
+            templateName: payload.templateName || '',
+            blobStoreId,
+          }),
         };
       },
       onUploadCompleted: async () => {},
@@ -41,6 +56,39 @@ function isAllowedPath(pathname) {
   return typeof pathname === 'string'
     && pathname.startsWith('imported-contracts/')
     && pathname.toLowerCase().endsWith('.pdf');
+}
+
+function sanitizeEnv(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function getRequestJsonBody(req) {
+  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+    return req.body;
+  }
+
+  if (Buffer.isBuffer(req.body)) {
+    return JSON.parse(req.body.toString('utf8'));
+  }
+
+  if (typeof req.body === 'string') {
+    return JSON.parse(req.body);
+  }
+
+  throw new Error('Payload upload Blob non valido.');
+}
+
+function parseClientPayload(rawPayload) {
+  if (!rawPayload || typeof rawPayload !== 'string') {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(rawPayload);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_error) {
+    return {};
+  }
 }
 
 function toWebRequest(req) {

@@ -1,5 +1,7 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.16';
+const APP_VERSION = '1.17';
+const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
+const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const CONTRACT_TEMPLATES = {
   'pvr-vincitu': {
     label: 'PVR Vincitu',
@@ -492,6 +494,8 @@ async function analyzeImportedContractPdf(file) {
       contractType: elements.contractType.value,
       fileName: file.name,
       contractName: sanitizeText(elements.importContractName?.value) || fileNameWithoutExt,
+      sourceFile: file,
+      contentType: file.type || 'application/pdf',
       bytes,
       templateHash: hash,
       fields: analysis.fields,
@@ -845,6 +849,106 @@ function toggleImportedFieldRemoved(fieldId) {
   updateImportedContractUi();
 }
 
+function isLocalDevelopmentHost() {
+  const hostname = window.location.hostname || '';
+  return hostname === 'localhost'
+    || hostname === '127.0.0.1'
+    || hostname === '[::1]'
+    || hostname.endsWith('.local');
+}
+
+function shouldUseDirectBlobUpload(file) {
+  return Boolean(file && file.size > SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES && !isLocalDevelopmentHost());
+}
+
+function buildImportedContractBlobPath(draft) {
+  const contractType = (sanitizeText(draft?.contractType) || 'generic')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const templateHash = (sanitizeText(draft?.templateHash) || generateId())
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+  return `imported-contracts/${contractType || 'generic'}/${templateHash || generateId()}.pdf`;
+}
+
+async function uploadImportedContractPdfViaBlob(draft) {
+  if (!draft?.sourceFile) {
+    throw new Error('File PDF originale non disponibile. Ricarica il contratto e riprova.');
+  }
+
+  let upload;
+  try {
+    ({ upload } = await import(BLOB_CLIENT_MODULE_URL));
+  } catch (error) {
+    console.error(error);
+    throw new Error('Impossibile inizializzare l upload diretto del PDF. Verifica la connessione e riprova.');
+  }
+
+  try {
+    const blob = await upload(buildImportedContractBlobPath(draft), draft.sourceFile, {
+      access: 'public',
+      handleUploadUrl: '/api/blob-upload',
+      clientPayload: JSON.stringify({
+        contractType: draft.contractType,
+        templateHash: draft.templateHash,
+        templateName: draft.fileName,
+      }),
+    });
+
+    return {
+      storageMode: 'vercel-blob',
+      url: blob.url,
+      downloadUrl: blob.downloadUrl || blob.url,
+      pathname: blob.pathname || buildImportedContractBlobPath(draft),
+      size: Number(blob.size) || draft.sourceFile.size || 0,
+      contentType: blob.contentType || draft.contentType || 'application/pdf',
+      uploadedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error(error);
+    const message = sanitizeText(error?.message);
+    if (message.includes('BLOB_READ_WRITE_TOKEN') || message.includes('Blob')) {
+      throw new Error('Vercel Blob non e configurato. Crea uno store Blob e imposta BLOB_READ_WRITE_TOKEN prima di caricare PDF grandi online.');
+    }
+    throw new Error(message || 'Errore durante l upload diretto del PDF.');
+  }
+}
+
+async function persistImportedContractSource(draft) {
+  const sourceFile = draft?.sourceFile || null;
+  if (shouldUseDirectBlobUpload(sourceFile)) {
+    elements.importContractStatus.textContent = 'Upload diretto del PDF su storage esterno...';
+    return uploadImportedContractPdfViaBlob(draft);
+  }
+
+  elements.importContractStatus.textContent = 'Salvataggio del PDF originale nel database...';
+  const params = new URLSearchParams({
+    templateHash: draft.templateHash,
+    contractType: draft.contractType,
+    templateName: draft.fileName,
+  });
+  const templateResponse = await fetch(`/api/templates?${params}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': draft.contentType || 'application/pdf',
+      'x-template-hash': draft.templateHash,
+    },
+    body: draft.bytes,
+  });
+  if (!templateResponse.ok) {
+    const body = await safeJson(templateResponse);
+    throw new Error(body?.error || 'Errore salvataggio PDF originale nel database.');
+  }
+
+  return {
+    storageMode: 'database',
+    size: Number(draft.bytes?.byteLength) || Number(sourceFile?.size) || 0,
+    contentType: draft.contentType || sourceFile?.type || 'application/pdf',
+    uploadedAt: new Date().toISOString(),
+  };
+}
+
 async function saveImportedContractTemplateFlow() {
   const draft = state.importedContractDraft;
   if (!draft) {
@@ -884,30 +988,16 @@ async function saveImportedContractTemplateFlow() {
 
   try {
     elements.importContractStatus.textContent = 'Salvataggio del template importato...';
-
-    const params = new URLSearchParams({
-      templateHash: draft.templateHash,
-      contractType: draft.contractType,
-      templateName: draft.fileName,
-    });
-    const templateResponse = await fetch(`/api/templates?${params}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/pdf',
-        'x-template-hash': draft.templateHash,
-      },
-      body: draft.bytes,
-    });
-    if (!templateResponse.ok) {
-      const body = await safeJson(templateResponse);
-      throw new Error(body?.error || 'Errore salvataggio PDF originale nel database.');
-    }
+    const templateStorage = await persistImportedContractSource(draft);
 
     const metadata = {
       pageCount: draft.pageCount,
       fieldCount: approvedFields.length,
       originalFieldCount: draft.fields.length,
       sourceFileName: draft.fileName,
+      sourceFileSize: Number(draft.sourceFile?.size) || Number(draft.bytes?.byteLength) || 0,
+      sourceContentType: draft.contentType || draft.sourceFile?.type || 'application/pdf',
+      templateStorage,
       importedAt: new Date().toISOString(),
     };
     const response = await fetch('/api/imported-contract-templates', {

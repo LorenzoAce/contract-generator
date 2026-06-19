@@ -3959,9 +3959,9 @@ function setIssueDateField(fields, fieldName, fullDateValue, font) {
 
   const preferredValue = minWidgetWidth && minWidgetWidth < 60 ? shortValue : primaryValue;
   const fallbackValue = preferredValue === primaryValue ? shortValue : primaryValue;
-  const applied = setTextWithAutoFit(field, preferredValue, font, { minFontSize: 7, maxFontSize: 10, allowTruncate: false });
+  const applied = setTextWithAutoFit(field, preferredValue, font, { minFontSize: 3, maxFontSize: 10, allowTruncate: false });
   if (!applied && fallbackValue && fallbackValue !== preferredValue) {
-    setTextWithAutoFit(field, fallbackValue, font, { minFontSize: 7, maxFontSize: 10, allowTruncate: false });
+    setTextWithAutoFit(field, fallbackValue, font, { minFontSize: 3, maxFontSize: 10, allowTruncate: false });
   }
 }
 

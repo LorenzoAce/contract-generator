@@ -1,17 +1,64 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.24';
+const APP_VERSION = '1.25';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
 const CONTRACT_TEMPLATES = {
   'pvr-vincitu': {
     label: 'PVR Vincitu',
-    directory: 'templates/pvr-vincitu',
+    directory: 'templates/vincitu',
     templateCandidates: [
       'contratto-pvr-vincitu-compilabile-2026.pdf',
       'contratto-template.pdf',
     ],
   },
+  novapay: {
+    label: 'PDP Novapay',
+    directory: 'templates/novapay',
+    templateCandidates: [
+      'contratto-novapay.pdf',
+    ],
+  },
+};
+
+const NOVAPAY_COMPANY_TYPE_FIELDS = ['ditta-individuale', 'sas', 'snc', 'srl', 'spa'];
+
+const NOVAPAY_STEP_OVERRIDES = {
+  0: {
+    title: 'Dati Azienda',
+    description: 'Compila anagrafica, contatti, sede legale e forma giuridica richiesti dal contratto Novapay.',
+  },
+  1: {
+    title: 'Titolare / Firmatario',
+    description: 'Inserisci i dati del titolare o legale rappresentante riportati nel contratto Novapay.',
+  },
+  8: {
+    title: 'Firma',
+    description: 'Inserisci luogo e data, acquisisci la firma grafica e prepara il PDF Novapay finale.',
+  },
+  9: {
+    title: 'Riepilogo Finale',
+    description: 'Verifica i dati Novapay prima di generare e scaricare il PDF finale.',
+  },
+};
+
+const NOVAPAY_ACTIVE_STEPS = [0, 1, 8, 9];
+
+const NOVAPAY_TEXT_FIELD_MAPPING = {
+  companyName: 'societa',
+  vatOrTaxCode: 'partita-iva',
+  phone: 'telefono',
+  email: 'email',
+  legalStreet: 'via-sede-legale',
+  legalNumber: 'civico-sede-legale',
+  legalCap: 'cap-sede-legale',
+  legalCity: 'citta-sede-legale',
+  legalProvince: 'provincia-sede-legale',
+  representativeTaxCode: 'codice-fiscale-titolare',
+  birthDate: 'data-nascita-titolare',
+  birthCity: 'citta-natale-titolare',
+  residenceCity: 'citta-residenza-titolare',
+  placeAndDate: 'luogo-e-data',
 };
 
 const TEXT_FIELD_MAPPING = {
@@ -64,6 +111,13 @@ const SIGNATURE_LAYOUTS = {
     yOffset: -10,
     maxWidth: 150,
     extraWidth: 70,
+    height: 42,
+  },
+  2: {
+    anchor: 'absolute',
+    absoluteX: 376,
+    yOffset: -10,
+    fixedWidth: 150,
     height: 42,
   },
   4: {
@@ -246,6 +300,15 @@ const elements = {
   criminalTribunal2: document.getElementById('criminalTribunal2'),
   criminalRecordNotes: document.getElementById('criminalRecordNotes'),
   pendingChargesNotes: document.getElementById('pendingChargesNotes'),
+  vatOrTaxCodeLabel: document.getElementById('vatOrTaxCodeLabel'),
+  novapayCompanyTypePanel: document.getElementById('novapayCompanyTypePanel'),
+  operationalAddressPanel: document.getElementById('operationalAddressPanel'),
+  birthProvinceGroup: document.getElementById('birthProvinceGroup'),
+  residenceStreetGroup: document.getElementById('residenceStreetGroup'),
+  residenceNumberGroup: document.getElementById('residenceNumberGroup'),
+  residenceProvinceGroup: document.getElementById('residenceProvinceGroup'),
+  documentStepDefaultFields: document.getElementById('documentStepDefaultFields'),
+  presentedByPanel: document.getElementById('presentedByPanel'),
   importContractModal: document.getElementById('importContractModal'),
   importContractFile: document.getElementById('importContractFile'),
   importContractName: document.getElementById('importContractName'),
@@ -330,8 +393,18 @@ function bindEvents() {
       deleteContractFromCloud(id);
     }
   });
-  elements.btnPrev.addEventListener('click', () => goToStep(state.currentStep - 1, { validateCurrent: false }));
-  elements.btnNext.addEventListener('click', () => goToStep(state.currentStep + 1, { validateCurrent: true }));
+  elements.btnPrev.addEventListener('click', () => {
+    const previousStep = getAdjacentActiveStep(state.currentStep, -1);
+    if (previousStep !== null) {
+      goToStep(previousStep, { validateCurrent: false });
+    }
+  });
+  elements.btnNext.addEventListener('click', () => {
+    const nextStep = getAdjacentActiveStep(state.currentStep, 1);
+    if (nextStep !== null) {
+      goToStep(nextStep, { validateCurrent: true });
+    }
+  });
   elements.documentUploads.addEventListener('change', handleDocumentUploadsChange);
   elements.importContractFile?.addEventListener('change', handleImportContractFileChange);
   elements.importContractName?.addEventListener('input', syncImportedContractName);
@@ -1478,15 +1551,19 @@ async function buildImportedDraftFromSavedTemplate(row) {
 }
 
 function renderStepper() {
-  elements.stepperNav.innerHTML = STEP_DEFINITIONS.map((step, index) => `
-    <button type="button" class="step-nav" data-target-step="${index}">
-      <span class="step-nav__index">${index + 1}</span>
+  const activeSteps = getActiveStepIndices();
+  elements.stepperNav.innerHTML = activeSteps.map((actualStepIndex, visualIndex) => {
+    const step = getStepDefinition(actualStepIndex);
+    return `
+    <button type="button" class="step-nav" data-target-step="${actualStepIndex}">
+      <span class="step-nav__index">${visualIndex + 1}</span>
       <span>
         <span class="step-nav__title">${escapeHtml(step.title)}</span>
         <span class="step-nav__status">Dopo</span>
       </span>
     </button>
-  `).join('');
+  `;
+  }).join('');
 
   elements.stepperNav.querySelectorAll('[data-target-step]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -1498,6 +1575,37 @@ function renderStepper() {
       goToStep(targetStep, { validateCurrent: false });
     });
   });
+}
+
+function getActiveStepIndices() {
+  if (isNovapaySelected()) {
+    return [...NOVAPAY_ACTIVE_STEPS];
+  }
+  return STEP_DEFINITIONS.map((_, index) => index);
+}
+
+function getStepDefinition(stepIndex) {
+  const base = STEP_DEFINITIONS[stepIndex];
+  if (!base) {
+    return STEP_DEFINITIONS[0];
+  }
+  if (isNovapaySelected() && NOVAPAY_STEP_OVERRIDES[stepIndex]) {
+    return { ...base, ...NOVAPAY_STEP_OVERRIDES[stepIndex] };
+  }
+  return base;
+}
+
+function getAdjacentActiveStep(currentStep, direction) {
+  const activeSteps = getActiveStepIndices();
+  const currentIndex = activeSteps.indexOf(clampStep(currentStep));
+  if (currentIndex < 0) {
+    return activeSteps[0] ?? null;
+  }
+  const targetIndex = currentIndex + direction;
+  if (targetIndex < 0 || targetIndex >= activeSteps.length) {
+    return null;
+  }
+  return activeSteps[targetIndex];
 }
 
 function handleFormInteraction(event) {
@@ -1631,7 +1739,9 @@ function handleContractTypeChange({ suppressStatus = false } = {}) {
   state.contractsCache = [];
   state.savedTemplatesCache = [];
   state.dynamicContractRenderKey = '';
+  state.currentStep = clampStep(state.currentStep);
   resetGeneratedPdf();
+  renderStepper();
   triggerAutosave();
   refreshUi();
   if (!suppressStatus) {
@@ -2833,7 +2943,24 @@ function goToStep(stepIndex, { validateCurrent = true } = {}) {
 }
 
 function clampStep(stepIndex) {
-  return Math.max(0, Math.min(STEP_DEFINITIONS.length - 1, stepIndex));
+  const activeSteps = getActiveStepIndices();
+  if (!activeSteps.length) {
+    return 0;
+  }
+  const normalized = Number.isFinite(stepIndex) ? stepIndex : activeSteps[0];
+  if (activeSteps.includes(normalized)) {
+    return normalized;
+  }
+  if (normalized <= activeSteps[0]) {
+    return activeSteps[0];
+  }
+  const lastStep = activeSteps[activeSteps.length - 1];
+  if (normalized >= lastStep) {
+    return lastStep;
+  }
+  return activeSteps.reduce((closest, candidate) => (
+    Math.abs(candidate - normalized) < Math.abs(closest - normalized) ? candidate : closest
+  ), activeSteps[0]);
 }
 
 function scrollWizardTop() {
@@ -2844,6 +2971,7 @@ function refreshUi() {
   syncPresentedByFields();
   syncOperationalAddressFields();
   syncDynamicContractUi();
+  applyContractSpecificUi();
   updateWizardUi();
   updateStepVisibility();
   updateReviewSummaries();
@@ -2852,40 +2980,104 @@ function refreshUi() {
 }
 
 function updateWizardUi() {
-  const step = STEP_DEFINITIONS[state.currentStep];
-  const progress = Math.round(((state.currentStep + 1) / STEP_DEFINITIONS.length) * 100);
+  const activeSteps = getActiveStepIndices();
+  const step = getStepDefinition(state.currentStep);
+  const currentVisualIndex = Math.max(0, activeSteps.indexOf(state.currentStep));
+  const progress = Math.round(((currentVisualIndex + 1) / activeSteps.length) * 100);
 
   elements.wizardTitle.textContent = step.title;
   elements.wizardDescription.textContent = step.description;
   elements.completionPercent.textContent = `${progress}%`;
   elements.wizardProgressBar.style.width = `${progress}%`;
   elements.wizardProgressBar.parentElement.setAttribute('aria-valuenow', String(progress));
-  elements.btnPrev.disabled = state.currentStep === 0;
-  elements.btnNext.disabled = state.currentStep === STEP_DEFINITIONS.length - 1;
-  elements.btnNext.textContent = state.currentStep === STEP_DEFINITIONS.length - 2 ? 'Vai al riepilogo' : 'Continua';
+  elements.btnPrev.disabled = currentVisualIndex === 0;
+  elements.btnNext.disabled = currentVisualIndex === activeSteps.length - 1;
+  elements.btnNext.textContent = currentVisualIndex === activeSteps.length - 2 ? 'Vai al riepilogo' : 'Continua';
 }
 
 function updateStepVisibility() {
+  const activeSteps = new Set(getActiveStepIndices());
   elements.wizardSteps.forEach((step, index) => {
-    step.classList.toggle('active', index === state.currentStep);
+    const isActiveContractStep = activeSteps.has(index);
+    step.classList.toggle('d-none', !isActiveContractStep);
+    step.classList.toggle('active', isActiveContractStep && index === state.currentStep);
   });
 }
 
 function updateStepperStatus() {
   const buttons = elements.stepperNav.querySelectorAll('[data-target-step]');
-  buttons.forEach((button, index) => {
-    const valid = validateStep(index, { silent: true });
+  buttons.forEach((button) => {
+    const targetStep = Number(button.dataset.targetStep);
+    const valid = validateStep(targetStep, { silent: true });
     const status = button.querySelector('.step-nav__status');
-    button.classList.toggle('is-current', index === state.currentStep);
+    button.classList.toggle('is-current', targetStep === state.currentStep);
     button.classList.toggle('is-complete', valid);
-    status.textContent = valid ? 'OK' : index === state.currentStep ? 'Ora' : 'Dopo';
+    status.textContent = valid ? 'OK' : targetStep === state.currentStep ? 'Ora' : 'Dopo';
   });
+}
+
+function isNovapaySelected() {
+  return sanitizeText(elements.contractType?.value) === 'novapay';
+}
+
+function applyContractSpecificUi() {
+  const novapaySelected = isNovapaySelected();
+  toggleElement(document.getElementById('pecGroup'), !novapaySelected);
+  toggleElement(document.getElementById('mobileGroup'), !novapaySelected);
+  toggleElement(elements.operationalAddressPanel, !novapaySelected);
+  toggleElement(elements.novapayCompanyTypePanel, novapaySelected);
+  toggleElement(elements.birthProvinceGroup, !novapaySelected);
+  toggleElement(elements.residenceStreetGroup, !novapaySelected);
+  toggleElement(elements.residenceNumberGroup, !novapaySelected);
+  toggleElement(elements.residenceProvinceGroup, !novapaySelected);
+  toggleElement(elements.documentStepDefaultFields, !novapaySelected);
+  toggleElement(elements.presentedByPanel, !novapaySelected);
+
+  if (elements.vatOrTaxCodeLabel) {
+    elements.vatOrTaxCodeLabel.textContent = novapaySelected ? 'Partita IVA' : 'Partita IVA / Codice Fiscale';
+  }
+
+  const activeSteps = getActiveStepIndices();
+  elements.wizardSteps.forEach((stepElement, index) => {
+    const titleElement = stepElement.querySelector('.step-card__title');
+    const copyElement = stepElement.querySelector('.step-card__copy');
+    const eyebrowElement = stepElement.querySelector('.step-card__eyebrow');
+    if (titleElement && !titleElement.dataset.defaultText) {
+      titleElement.dataset.defaultText = titleElement.textContent;
+    }
+    if (copyElement && !copyElement.dataset.defaultText) {
+      copyElement.dataset.defaultText = copyElement.textContent;
+    }
+
+    const override = novapaySelected ? NOVAPAY_STEP_OVERRIDES[index] : null;
+    if (titleElement) {
+      titleElement.textContent = override?.title || titleElement.dataset.defaultText || titleElement.textContent;
+    }
+    if (copyElement) {
+      copyElement.textContent = override?.description || copyElement.dataset.defaultText || copyElement.textContent;
+    }
+    if (eyebrowElement) {
+      const visualIndex = activeSteps.indexOf(index);
+      eyebrowElement.textContent = visualIndex >= 0 ? `Fase ${visualIndex + 1} di ${activeSteps.length}` : '';
+    }
+  });
+}
+
+function toggleElement(element, visible) {
+  if (!element) {
+    return;
+  }
+  element.classList.toggle('d-none', !visible);
 }
 
 function updateReviewSummaries() {
   const data = collectFormData();
   if (isImportedContractSelected()) {
     renderImportedContractSummaries(data);
+    return;
+  }
+  if (isNovapaySelected()) {
+    renderNovapaySummaries(data);
     return;
   }
 
@@ -2936,6 +3128,33 @@ function renderImportedContractSummaries(data) {
   renderSummaryGrid(elements.finalSummary, finalRows.length ? finalRows : [['Contratto', getCurrentContractConfig().label]]);
 }
 
+function renderNovapaySummaries(data) {
+  renderSummaryGrid(elements.annexASummary, [
+    ['Ragione Sociale', data.companyName],
+    ['Partita IVA', data.vatOrTaxCode],
+    ['Forma giuridica', getNovapayCompanyTypeLabel(data.novapayCompanyType)],
+    ['Sede Legale', compactAddress(data.legalStreet, data.legalNumber, data.legalCap, data.legalCity, data.legalProvince)],
+    ['Contatti', [data.email, data.phone].filter(Boolean).join(' | ')],
+  ]);
+
+  renderSummaryGrid(elements.antimafiaSummary, [
+    ['Firmatario', compactName(data.representativeFirstName, data.representativeLastName)],
+    ['Codice fiscale', data.representativeTaxCode],
+    ['Data di nascita', formatDate(data.birthDate)],
+    ['Luogo di nascita', data.birthCity],
+    ['Citta di residenza', data.residenceCity],
+  ]);
+
+  renderSummaryGrid(elements.finalSummary, [
+    ['Azienda', data.companyName],
+    ['Partita IVA', data.vatOrTaxCode],
+    ['Forma giuridica', getNovapayCompanyTypeLabel(data.novapayCompanyType)],
+    ['Firmatario', compactName(data.representativeFirstName, data.representativeLastName)],
+    ['Luogo e data', data.placeAndDate],
+    ['Firma', state.signatureDataUrl ? 'Presente' : 'Da acquisire'],
+  ]);
+}
+
 function renderSummaryGrid(container, rows) {
   container.innerHTML = rows.map(([label, value]) => `
     <div class="summary-item">
@@ -2954,6 +3173,21 @@ function updateChecklist() {
       ['Campi operativi', validateActivityStep({ silent: true })],
       ['Campi fiscali / opzioni', validateFiscalStep({ silent: true })],
       ['Firma del contratto', validateSignatureStep({ silent: true })],
+    ];
+
+    elements.finalChecklist.innerHTML = checks.map(([label, ok]) => `
+      <div class="checklist-item ${ok ? 'is-complete' : ''}">
+        <span>${ok ? 'OK' : '...' } ${escapeHtml(label)}</span>
+        <span class="checklist-item__icon">${ok ? 'Completato' : 'In attesa'}</span>
+      </div>
+    `).join('');
+    return;
+  }
+  if (isNovapaySelected()) {
+    const checks = [
+      ['Dati azienda Novapay', validateCompanyStep({ silent: true })],
+      ['Firmatario Novapay', validateRepresentativeStep({ silent: true })],
+      ['Firma e luogo/data', validateSignatureStep({ silent: true })],
     ];
 
     elements.finalChecklist.innerHTML = checks.map(([label, ok]) => `
@@ -2983,15 +3217,16 @@ function updateChecklist() {
 }
 
 function validateStep(stepIndex, options = {}) {
-  return STEP_DEFINITIONS[stepIndex].validate(options);
+  const definition = getStepDefinition(stepIndex);
+  return definition?.validate ? definition.validate(options) : true;
 }
 
 function validateAllRequiredSteps() {
-  return STEP_DEFINITIONS.every((_, index) => validateStep(index, { silent: true }));
+  return getActiveStepIndices().every((index) => validateStep(index, { silent: true }));
 }
 
 function goToFirstInvalidStep() {
-  const invalidIndex = STEP_DEFINITIONS.findIndex((_, index) => !validateStep(index, { silent: true }));
+  const invalidIndex = getActiveStepIndices().find((index) => !validateStep(index, { silent: true }));
   if (invalidIndex >= 0) {
     state.currentStep = invalidIndex;
     refreshUi();
@@ -3002,6 +3237,22 @@ function goToFirstInvalidStep() {
 function validateCompanyStep({ silent = false } = {}) {
   if (isImportedContractSelected()) {
     return validateImportedContractStep(0, { silent });
+  }
+  if (isNovapaySelected()) {
+    let valid = [
+      'companyName',
+      'vatOrTaxCode',
+      'email',
+      'phone',
+      'legalStreet',
+      'legalNumber',
+      'legalCap',
+      'legalCity',
+      'legalProvince',
+    ].every((name) => validateNamedField(name, { silent }));
+    valid = validateEmailField('email', { silent }) && valid;
+    valid = validateRadioField('novapayCompanyType', { silent, message: 'Seleziona la forma giuridica Novapay.' }) && valid;
+    return valid;
   }
   const fields = [
     'companyName',
@@ -3030,6 +3281,16 @@ function validateRepresentativeStep({ silent = false } = {}) {
   if (isImportedContractSelected()) {
     return validateImportedContractStep(1, { silent });
   }
+  if (isNovapaySelected()) {
+    return [
+      'representativeFirstName',
+      'representativeLastName',
+      'representativeTaxCode',
+      'birthDate',
+      'birthCity',
+      'residenceCity',
+    ].every((name) => validateNamedField(name, { silent }));
+  }
   return [
     'representativeFirstName',
     'representativeLastName',
@@ -3047,6 +3308,9 @@ function validateRepresentativeStep({ silent = false } = {}) {
 function validateDocumentStep({ silent = false } = {}) {
   if (isImportedContractSelected()) {
     return validateImportedContractStep(2, { silent });
+  }
+  if (isNovapaySelected()) {
+    return true;
   }
   let valid = [
     'documentType',
@@ -3075,6 +3339,9 @@ function validateActivityStep({ silent = false } = {}) {
   if (isImportedContractSelected()) {
     return validateImportedContractStep(3, { silent });
   }
+  if (isNovapaySelected()) {
+    return true;
+  }
   return [
     'cciaaNumber',
     'cciaaChamber',
@@ -3088,12 +3355,18 @@ function validateFiscalStep({ silent = false } = {}) {
   if (isImportedContractSelected()) {
     return validateImportedContractStep(4, { silent });
   }
+  if (isNovapaySelected()) {
+    return true;
+  }
   return Boolean(document.querySelector('input[name="fiscalRegime"]:checked'));
 }
 
 function validateAnnexAStep({ silent = false } = {}) {
   if (isImportedContractSelected()) {
     return validateImportedContractStep(5, { silent });
+  }
+  if (isNovapaySelected()) {
+    return true;
   }
   const checked = document.getElementById('annexAConfirmed').checked;
   elements.annexAConfirmedError.textContent = silent || checked ? '' : 'Conferma i dati dell Allegato A per proseguire.';
@@ -3103,6 +3376,9 @@ function validateAnnexAStep({ silent = false } = {}) {
 function validateCriminalStep({ silent = false } = {}) {
   if (isImportedContractSelected()) {
     return validateImportedContractStep(6, { silent });
+  }
+  if (isNovapaySelected()) {
+    return true;
   }
   if (elements.criminalNulla.checked) {
     return true;
@@ -3120,6 +3396,9 @@ function validateAntimafiaStep({ silent = false } = {}) {
   if (isImportedContractSelected()) {
     return validateImportedContractStep(7, { silent });
   }
+  if (isNovapaySelected()) {
+    return true;
+  }
   const checked = document.getElementById('antimafiaConfirmed').checked;
   elements.antimafiaConfirmedError.textContent = silent || checked ? '' : 'Conferma i dati dell autocertificazione antimafia per proseguire.';
   return checked;
@@ -3132,6 +3411,15 @@ function validateSignatureStep({ silent = false } = {}) {
       elements.signatureError.textContent = '';
       return true;
     }
+  }
+  if (isNovapaySelected()) {
+    const hasSignature = Boolean(state.signatureDataUrl);
+    const hasPlaceAndDate = validateNamedField('placeAndDate', {
+      silent,
+      customRequiredMessage: 'Compila luogo e data del contratto Novapay.',
+    });
+    elements.signatureError.textContent = silent || hasSignature ? '' : 'Acquisisci la firma prima di continuare.';
+    return hasSignature && hasPlaceAndDate;
   }
   const ok = Boolean(state.signatureDataUrl);
   elements.signatureError.textContent = silent || ok ? '' : 'Acquisisci la firma prima di continuare.';
@@ -3185,6 +3473,36 @@ function validateNamedField(fieldName, { silent = false, customRequiredMessage =
 
 function validateEmailField(fieldName, { silent = false } = {}) {
   return validateNamedField(fieldName, { silent });
+}
+
+function validateRadioField(fieldName, { silent = false, message = 'Seleziona una opzione.' } = {}) {
+  const radios = Array.from(elements.form.querySelectorAll(`input[name="${CSS.escape(fieldName)}"]`));
+  if (!radios.length) {
+    return true;
+  }
+  const checked = radios.find((radio) => radio.checked);
+  const firstRadio = radios[0];
+  if (checked) {
+    clearInvalid(firstRadio);
+    return true;
+  }
+  if (!silent) {
+    setInvalid(firstRadio, message);
+  } else {
+    clearInvalid(firstRadio);
+  }
+  return false;
+}
+
+function getNovapayCompanyTypeLabel(value) {
+  const labels = {
+    'ditta-individuale': 'Ditta individuale',
+    sas: 'SAS',
+    snc: 'SNC',
+    srl: 'SRL',
+    spa: 'SPA',
+  };
+  return labels[sanitizeText(value)] || 'Da selezionare';
 }
 
 function validateRelatedField(target, { silent = false } = {}) {
@@ -3386,6 +3704,11 @@ async function fillTemplate(templateBytes, data) {
     form.flatten();
     return pdfDoc.save();
   }
+  if (isNovapaySelected()) {
+    await fillNovapayTemplate(pdfDoc, form, fields, data, font);
+    form.flatten();
+    return pdfDoc.save();
+  }
 
   const representativeFullName = [data.representativeFirstName, data.representativeLastName]
     .map((value) => sanitizeText(value))
@@ -3453,6 +3776,34 @@ async function fillTemplate(templateBytes, data) {
 
   form.flatten();
   return pdfDoc.save();
+}
+
+async function fillNovapayTemplate(pdfDoc, form, fields, data, font) {
+  const representativeFullName = compactName(data.representativeFirstName, data.representativeLastName);
+
+  Object.entries(NOVAPAY_TEXT_FIELD_MAPPING).forEach(([sourceKey, fieldName]) => {
+    const pdfField = fields.get(fieldName);
+    if (!pdfField || typeof pdfField.setText !== 'function') {
+      return;
+    }
+    const value = sourceKey === 'birthDate'
+      ? formatDate(data[sourceKey])
+      : sanitizeText(data[sourceKey]);
+    setTextWithAutoFit(pdfField, value, font);
+  });
+
+  const representativeField = fields.get('nome-e-cognome-titolare');
+  if (representativeField && typeof representativeField.setText === 'function') {
+    setTextWithAutoFit(representativeField, representativeFullName, font);
+  }
+
+  NOVAPAY_COMPANY_TYPE_FIELDS.forEach((fieldName) => {
+    setCheckboxValue(fields, fieldName, sanitizeText(data.novapayCompanyType) === fieldName);
+  });
+
+  if (state.signatureDataUrl) {
+    await drawSignatureOnSignatureLines(pdfDoc, form, 'luogo-e-data');
+  }
 }
 
 function mapTextValues(data, representativeFullName, operationalCityValue) {
@@ -3643,6 +3994,19 @@ function setCheckboxValue(fields, fieldName, checked) {
   }
 }
 
+function setRadioGroupValue(fields, fieldName, selectedValue) {
+  const field = fields.get(fieldName);
+  const value = sanitizeText(selectedValue);
+  if (!field || typeof field.select !== 'function' || !value) {
+    return;
+  }
+  try {
+    field.select(value);
+  } catch (_error) {
+    // Ignore invalid export value if the PDF radio options differ.
+  }
+}
+
 async function drawSignatureOnSignatureLines(pdfDoc, form, anchorTextFieldName) {
   const signatureFieldName = sanitizeText(anchorTextFieldName) || 'luogo-e-data';
   const signatureField = form.getTextField(signatureFieldName);
@@ -3650,8 +4014,9 @@ async function drawSignatureOnSignatureLines(pdfDoc, form, anchorTextFieldName) 
   const signatureBytes = await fetch(trimmedSignatureDataUrl).then((response) => response.arrayBuffer());
   const signatureImage = await pdfDoc.embedPng(signatureBytes);
   const pages = pdfDoc.getPages();
+  const widgets = signatureField.acroField.getWidgets();
 
-  signatureField.acroField.getWidgets().forEach((widget) => {
+  widgets.forEach((widget, widgetIndex) => {
     const rect = widget.getRectangle();
     const pageIndex = pages.findIndex((page) => page.ref === widget.P());
     if (pageIndex < 0) {

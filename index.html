@@ -27,7 +27,7 @@
               <path d="M27 34h12M27 41h12" fill="none" stroke="#6f42c1" stroke-width="4" stroke-linecap="round"></path>
             </svg>
           </div><div class="brand-copy">
-            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.24</span></h1>
+            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.25</span></h1>
             <p class="hero-copy mb-0">Compilazione guidata del contratto e degli allegati in pochi passaggi.</p>
           </div>
         </div>
@@ -118,36 +118,63 @@
                 <div class="step-card__body">
                   <div class="section-heading">Anagrafica azienda</div>
                   <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-6" id="companyNameGroup">
                       <label for="companyName" class="form-label required">Ragione Sociale</label>
                       <input type="text" class="form-control" id="companyName" name="companyName" data-required="true">
                       <div class="invalid-feedback"></div>
                     </div>
-                    <div class="col-md-6">
-                      <label for="vatOrTaxCode" class="form-label required">Partita IVA / Codice Fiscale</label>
+                    <div class="col-md-6" id="vatOrTaxCodeGroup">
+                      <label for="vatOrTaxCode" class="form-label required" id="vatOrTaxCodeLabel">Partita IVA / Codice Fiscale</label>
                       <input type="text" class="form-control" id="vatOrTaxCode" name="vatOrTaxCode" data-required="true">
                       <div class="invalid-feedback"></div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-4" id="pecGroup">
                       <label for="pec" class="form-label">PEC</label>
                       <input type="email" class="form-control" id="pec" name="pec">
                       <div class="invalid-feedback"></div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-4" id="emailGroup">
                       <label for="email" class="form-label required">Email</label>
                       <input type="email" class="form-control" id="email" name="email" data-required="true">
                       <div class="invalid-feedback"></div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-2" id="phoneGroup">
                       <label for="phone" class="form-label">Telefono</label>
                       <input type="text" class="form-control" id="phone" name="phone">
                       <div class="invalid-feedback"></div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-2" id="mobileGroup">
                       <label for="mobile" class="form-label required">Cellulare</label>
                       <input type="text" class="form-control" id="mobile" name="mobile" data-required="true">
                       <div class="invalid-feedback"></div>
                     </div>
+                  </div>
+
+                  <div class="surface-panel mt-4 d-none" id="novapayCompanyTypePanel">
+                    <div class="section-heading">Forma giuridica</div>
+                    <div class="segmented-grid">
+                      <label class="choice-chip">
+                        <input type="radio" name="novapayCompanyType" value="ditta-individuale">
+                        <span>Ditta individuale</span>
+                      </label>
+                      <label class="choice-chip">
+                        <input type="radio" name="novapayCompanyType" value="sas">
+                        <span>SAS</span>
+                      </label>
+                      <label class="choice-chip">
+                        <input type="radio" name="novapayCompanyType" value="snc">
+                        <span>SNC</span>
+                      </label>
+                      <label class="choice-chip">
+                        <input type="radio" name="novapayCompanyType" value="srl">
+                        <span>SRL</span>
+                      </label>
+                      <label class="choice-chip">
+                        <input type="radio" name="novapayCompanyType" value="spa">
+                        <span>SPA</span>
+                      </label>
+                    </div>
+                    <div class="form-text mt-2">Seleziona la forma giuridica che deve essere spuntata nel contratto Novapay.</div>
                   </div>
 
                   <div class="row g-4 mt-1">
@@ -185,7 +212,7 @@
                         </div>
                       </div>
                     </div>
-                    <div class="col-12 col-lg-6">
+                    <div class="col-12 col-lg-6" id="operationalAddressPanel">
                       <div class="surface-panel h-100">
                         <div class="section-heading">Sede Operativa</div>
                         <div class="form-check mb-3">
@@ -265,7 +292,7 @@
                       <input type="text" class="form-control" id="birthCity" name="birthCity" data-required="true">
                       <div class="invalid-feedback"></div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-4" id="birthProvinceGroup">
                       <label for="birthProvince" class="form-label required">Provincia di nascita</label>
                       <input type="text" class="form-control" id="birthProvince" name="birthProvince" data-required="true">
                       <div class="invalid-feedback"></div>
@@ -274,12 +301,12 @@
 
                   <div class="section-heading mt-4">Residenza</div>
                   <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-6" id="residenceStreetGroup">
                       <label for="residenceStreet" class="form-label required">Indirizzo</label>
                       <input type="text" class="form-control" id="residenceStreet" name="residenceStreet" data-required="true">
                       <div class="invalid-feedback"></div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-2" id="residenceNumberGroup">
                       <label for="residenceNumber" class="form-label required">Numero civico</label>
                       <input type="text" class="form-control" id="residenceNumber" name="residenceNumber" data-required="true">
                       <div class="invalid-feedback"></div>
@@ -289,7 +316,7 @@
                       <input type="text" class="form-control" id="residenceCity" name="residenceCity" data-required="true">
                       <div class="invalid-feedback"></div>
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-2" id="residenceProvinceGroup">
                       <label for="residenceProvince" class="form-label required">Provincia</label>
                       <input type="text" class="form-control" id="residenceProvince" name="residenceProvince" data-required="true">
                       <div class="invalid-feedback"></div>
@@ -309,7 +336,7 @@
                   </div>
                 </div>
                 <div class="step-card__body">
-                  <div class="row g-3">
+                  <div class="row g-3" id="documentStepDefaultFields">
                     <div class="col-md-3">
                       <label for="documentType" class="form-label required">Tipo documento</label>
                       <input type="text" class="form-control" id="documentType" name="documentType" data-required="true">
@@ -343,6 +370,7 @@
                       <div class="invalid-feedback d-block" id="documentUploadsError"></div>
                     </div>
                   </div>
+
                 </div>
               </div>
             </section>
@@ -547,7 +575,7 @@
                       <label class="form-label required d-block">Disegna firma</label>
                       <canvas id="signatureCanvas" width="900" height="260" class="signature-canvas"></canvas>
                       <div class="invalid-feedback d-block" id="signatureError"></div>
-                      <div class="surface-panel mt-3">
+                      <div class="surface-panel mt-3" id="presentedByPanel">
                         <div class="section-heading">Presentato da</div>
                         <input type="text" class="form-control" id="presentedBy" name="presentedBy" placeholder="Es. Nome e Cognome">
                         <div class="form-text">Viene riportato nel PDF nel campo agente-commerciale.</div>

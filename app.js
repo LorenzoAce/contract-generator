@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.15';
+const APP_VERSION = '1.16';
 const CONTRACT_TEMPLATES = {
   'pvr-vincitu': {
     label: 'PVR Vincitu',
@@ -165,6 +165,8 @@ const state = {
   isDrawing: false,
   lastPoint: null,
   autosaveTimer: null,
+  importedContractDraft: null,
+  importedContractPdfUrl: '',
 };
 
 const elements = {
@@ -206,6 +208,7 @@ const elements = {
   signatureInfo: document.getElementById('signatureInfo'),
   signatureError: document.getElementById('signatureError'),
   btnNuovo: document.getElementById('btnNuovo'),
+  btnImportContractPdf: document.getElementById('btnImportContractPdf'),
   btnSalva: document.getElementById('btnSalva'),
   btnCarica: document.getElementById('btnCarica'),
   btnGenera: document.getElementById('btnGenera'),
@@ -237,6 +240,19 @@ const elements = {
   criminalTribunal2: document.getElementById('criminalTribunal2'),
   criminalRecordNotes: document.getElementById('criminalRecordNotes'),
   pendingChargesNotes: document.getElementById('pendingChargesNotes'),
+  importContractModal: document.getElementById('importContractModal'),
+  importContractFile: document.getElementById('importContractFile'),
+  importContractName: document.getElementById('importContractName'),
+  importContractStatus: document.getElementById('importContractStatus'),
+  importContractFieldCount: document.getElementById('importContractFieldCount'),
+  importContractPageCount: document.getElementById('importContractPageCount'),
+  importContractActiveFieldCount: document.getElementById('importContractActiveFieldCount'),
+  importContractConfirmed: document.getElementById('importContractConfirmed'),
+  importContractPdfPreview: document.getElementById('importContractPdfPreview'),
+  importContractFieldPreview: document.getElementById('importContractFieldPreview'),
+  importContractFieldsBody: document.getElementById('importContractFieldsBody'),
+  btnReanalyzeImportContract: document.getElementById('btnReanalyzeImportContract'),
+  btnSaveImportedContractTemplate: document.getElementById('btnSaveImportedContractTemplate'),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -245,8 +261,6 @@ document.addEventListener('DOMContentLoaded', () => {
   renderStepper();
   bindEvents();
   setDefaultDates();
-  updateTemplateInfo();
-  refreshSavedTemplates({ silentErrors: true });
   updateDocumentUploadsMeta();
   toggleCriminalFields();
   loadFromLocalStorage({ silent: true, notifyIfMissing: false });
@@ -263,6 +277,7 @@ function renderAppVersion() {
 
 function bindEvents() {
   elements.btnNuovo.addEventListener('click', handleNewForm);
+  elements.btnImportContractPdf?.addEventListener('click', openImportContractModal);
   elements.btnSalva.addEventListener('click', openContractSaveModal);
   elements.btnCarica.addEventListener('click', openContractLoadModal);
   elements.btnGenera.addEventListener('click', async () => {
@@ -277,17 +292,7 @@ function bindEvents() {
   elements.signatureUpload.addEventListener('change', handleSignatureUpload);
   elements.btnPulisciFirma.addEventListener('click', clearSignatureCanvas);
   elements.btnInserisciFirma.addEventListener('click', captureSignature);
-  elements.btnUsaTemplate.addEventListener('click', selectManualTemplate);
-  elements.btnResetTemplate.addEventListener('click', resetTemplateSelection);
-  elements.templateFile.addEventListener('change', selectManualTemplate);
-  elements.btnSaveTemplateToDb.addEventListener('click', saveCurrentTemplateToDb);
-  elements.btnRefreshSavedTemplates.addEventListener('click', () => refreshSavedTemplates({ silentErrors: false }));
-  elements.btnUseSavedTemplate.addEventListener('click', useSavedTemplateFromDb);
   elements.contractType.addEventListener('change', handleContractTypeChange);
-  elements.btnOpenMapping.addEventListener('click', openMappingModal);
-  elements.btnSaveMapping.addEventListener('click', saveCurrentMapping);
-  elements.btnResetMapping.addEventListener('click', resetMappingToDefault);
-  elements.mappingFilter.addEventListener('input', () => renderMappingTables({ preserveSelections: true }));
   elements.btnContractSaveNew.addEventListener('click', saveNewContractToCloud);
   elements.btnContractSaveUpdate.addEventListener('click', updateCurrentContractInCloud);
   elements.btnContractRefresh.addEventListener('click', refreshContractList);
@@ -313,6 +318,12 @@ function bindEvents() {
   elements.btnPrev.addEventListener('click', () => goToStep(state.currentStep - 1, { validateCurrent: false }));
   elements.btnNext.addEventListener('click', () => goToStep(state.currentStep + 1, { validateCurrent: true }));
   elements.documentUploads.addEventListener('change', handleDocumentUploadsChange);
+  elements.importContractFile?.addEventListener('change', handleImportContractFileChange);
+  elements.importContractName?.addEventListener('input', syncImportedContractName);
+  elements.importContractConfirmed?.addEventListener('change', updateImportedContractUi);
+  elements.btnReanalyzeImportContract?.addEventListener('click', reanalyzeImportedContractPdf);
+  elements.btnSaveImportedContractTemplate?.addEventListener('click', saveImportedContractTemplateFlow);
+  elements.importContractModal?.addEventListener('hidden.bs.modal', handleImportContractModalHidden);
   elements.criminalNulla.addEventListener('change', () => {
     toggleCriminalFields();
     validateStep(6, { silent: true });
@@ -374,6 +385,558 @@ function setupFooterOffsetSync() {
   applyOffset();
   setTimeout(applyOffset, 0);
   setTimeout(applyOffset, 200);
+}
+
+function openImportContractModal() {
+  if (!state.importedContractDraft) {
+    resetImportedContractDraft();
+  } else {
+    updateImportedContractUi();
+  }
+}
+
+function handleImportContractModalHidden() {
+  resetImportedContractDraft({ preserveStatus: false });
+}
+
+function resetImportedContractDraft({ preserveStatus = true } = {}) {
+  revokeImportedContractPdfUrl();
+  state.importedContractDraft = null;
+  if (elements.importContractFile) {
+    elements.importContractFile.value = '';
+  }
+  if (elements.importContractName) {
+    elements.importContractName.value = '';
+  }
+  if (elements.importContractConfirmed) {
+    elements.importContractConfirmed.checked = false;
+  }
+  if (elements.importContractPdfPreview) {
+    elements.importContractPdfPreview.removeAttribute('src');
+  }
+  if (elements.importContractFieldPreview) {
+    elements.importContractFieldPreview.innerHTML = '<div class="text-secondary">Nessun PDF analizzato.</div>';
+  }
+  if (elements.importContractFieldsBody) {
+    elements.importContractFieldsBody.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-secondary">Nessun PDF analizzato.</td>
+      </tr>
+    `;
+  }
+  if (elements.importContractFieldCount) {
+    elements.importContractFieldCount.textContent = '0';
+  }
+  if (elements.importContractPageCount) {
+    elements.importContractPageCount.textContent = '0';
+  }
+  if (elements.importContractActiveFieldCount) {
+    elements.importContractActiveFieldCount.textContent = '0';
+  }
+  if (elements.importContractStatus && !preserveStatus) {
+    elements.importContractStatus.textContent = 'Seleziona un PDF per iniziare.';
+  }
+  if (elements.btnSaveImportedContractTemplate) {
+    elements.btnSaveImportedContractTemplate.disabled = true;
+  }
+}
+
+function revokeImportedContractPdfUrl() {
+  if (state.importedContractPdfUrl) {
+    URL.revokeObjectURL(state.importedContractPdfUrl);
+    state.importedContractPdfUrl = '';
+  }
+}
+
+async function handleImportContractFileChange() {
+  const [file] = Array.from(elements.importContractFile?.files || []);
+  if (!file) {
+    resetImportedContractDraft({ preserveStatus: false });
+    return;
+  }
+
+  await analyzeImportedContractPdf(file);
+}
+
+async function reanalyzeImportedContractPdf() {
+  const [file] = Array.from(elements.importContractFile?.files || []);
+  if (!file) {
+    setStatus('Seleziona prima un PDF da analizzare.', 'warning');
+    return;
+  }
+  await analyzeImportedContractPdf(file);
+}
+
+function syncImportedContractName() {
+  if (!state.importedContractDraft || !elements.importContractName) {
+    updateImportedContractUi();
+    return;
+  }
+
+  state.importedContractDraft.contractName = elements.importContractName.value;
+  updateImportedContractUi();
+}
+
+async function analyzeImportedContractPdf(file) {
+  try {
+    elements.importContractStatus.textContent = 'Analisi del PDF in corso...';
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const analysis = await inspectImportedContractFields(bytes);
+    const fileNameWithoutExt = file.name.replace(/\.pdf$/i, '');
+    const hash = window.crypto?.subtle ? await computeSha256Hex(bytes) : generateId();
+
+    revokeImportedContractPdfUrl();
+    state.importedContractPdfUrl = URL.createObjectURL(new Blob([bytes], { type: file.type || 'application/pdf' }));
+    state.importedContractDraft = {
+      id: generateId(),
+      contractType: elements.contractType.value,
+      fileName: file.name,
+      contractName: sanitizeText(elements.importContractName?.value) || fileNameWithoutExt,
+      bytes,
+      templateHash: hash,
+      fields: analysis.fields,
+      pages: analysis.pages,
+      pageCount: analysis.pages.length,
+    };
+
+    if (elements.importContractName && !sanitizeText(elements.importContractName.value)) {
+      elements.importContractName.value = state.importedContractDraft.contractName;
+    }
+    if (elements.importContractConfirmed) {
+      elements.importContractConfirmed.checked = false;
+    }
+
+    updateImportedContractUi();
+    elements.importContractStatus.textContent = analysis.fields.length
+      ? `Analisi completata: ${analysis.fields.length} campi rilevati.`
+      : 'PDF analizzato: nessun campo modulo rilevato.';
+  } catch (error) {
+    console.error(error);
+    resetImportedContractDraft();
+    elements.importContractStatus.textContent = error.message || 'Errore durante l analisi del PDF.';
+    setStatus(elements.importContractStatus.textContent, 'danger');
+  }
+}
+
+async function inspectImportedContractFields(templateBytes) {
+  const { PDFDocument, PDFName } = window.PDFLib;
+  const pdfDoc = await PDFDocument.load(templateBytes);
+  const pages = pdfDoc.getPages();
+  const pageRefs = pages.map((page) => page.ref);
+  const form = pdfDoc.getForm();
+  const fields = form.getFields();
+
+  const pageModels = pages.map((page, index) => ({
+    pageNumber: index + 1,
+    width: Math.max(1, Math.round(page.getWidth())),
+    height: Math.max(1, Math.round(page.getHeight())),
+  }));
+
+  const fieldModels = [];
+  fields.forEach((field, fieldIndex) => {
+    const originalName = sanitizeText(field.getName()) || `field_${fieldIndex + 1}`;
+    const normalizedType = inferImportedFieldType(field);
+    const widgets = getImportedFieldWidgets(field);
+
+    if (!widgets.length) {
+      fieldModels.push({
+        id: `${originalName}__0`,
+        originalName,
+        customName: originalName,
+        type: normalizedType,
+        pageNumber: 1,
+        rect: { x: 0, y: 0, width: 0, height: 0 },
+        description: '',
+        category: '',
+        removed: false,
+      });
+      return;
+    }
+
+    widgets.forEach((widget, widgetIndex) => {
+      const rect = getPdfRectFromWidget(widget);
+      const pageNumber = getWidgetPageNumber(widget, PDFName, pageRefs) || 1;
+      const suffix = widgets.length > 1 ? ` #${widgetIndex + 1}` : '';
+      fieldModels.push({
+        id: `${originalName}__${widgetIndex}`,
+        originalName,
+        customName: `${originalName}${suffix}`,
+        type: normalizedType,
+        pageNumber,
+        rect,
+        description: '',
+        category: '',
+        removed: false,
+      });
+    });
+  });
+
+  fieldModels.sort((a, b) => {
+    if (a.pageNumber !== b.pageNumber) {
+      return a.pageNumber - b.pageNumber;
+    }
+    if (a.rect.y !== b.rect.y) {
+      return b.rect.y - a.rect.y;
+    }
+    return a.rect.x - b.rect.x;
+  });
+
+  return {
+    pages: pageModels,
+    fields: fieldModels,
+  };
+}
+
+function inferImportedFieldType(field) {
+  const ctorName = sanitizeText(field?.constructor?.name).toLowerCase();
+  if (ctorName.includes('text')) {
+    return 'text';
+  }
+  if (ctorName.includes('check')) {
+    return 'checkbox';
+  }
+  if (ctorName.includes('radio')) {
+    return 'radio';
+  }
+  if (ctorName.includes('dropdown')) {
+    return 'dropdown';
+  }
+  if (ctorName.includes('optionlist')) {
+    return 'option-list';
+  }
+  if (ctorName.includes('button')) {
+    return 'button';
+  }
+  if (ctorName.includes('signature')) {
+    return 'signature';
+  }
+
+  if (typeof field.setText === 'function') {
+    return 'text';
+  }
+  if (typeof field.check === 'function' && typeof field.uncheck === 'function') {
+    return 'checkbox';
+  }
+  if (typeof field.select === 'function') {
+    return 'dropdown';
+  }
+  return 'unknown';
+}
+
+function getImportedFieldWidgets(field) {
+  try {
+    if (typeof field?.acroField?.getWidgets === 'function') {
+      const widgets = field.acroField.getWidgets();
+      return Array.isArray(widgets) ? widgets : [];
+    }
+  } catch (error) {
+    return [];
+  }
+  return [];
+}
+
+function getPdfRectFromWidget(widget) {
+  try {
+    if (typeof widget?.getRectangle === 'function') {
+      const rect = widget.getRectangle();
+      const width = Math.max(0, Number(rect?.width || 0));
+      const height = Math.max(0, Number(rect?.height || 0));
+      return {
+        x: Math.max(0, Number(rect?.x || 0)),
+        y: Math.max(0, Number(rect?.y || 0)),
+        width,
+        height,
+      };
+    }
+  } catch (error) {
+    // ignored
+  }
+  return { x: 0, y: 0, width: 0, height: 0 };
+}
+
+function getWidgetPageNumber(widget, PDFName, pageRefs) {
+  try {
+    const pageRef = widget?.dict?.get?.(PDFName.of('P'));
+    if (!pageRef) {
+      return null;
+    }
+    const index = pageRefs.findIndex((ref) => {
+      if (!ref || !pageRef) {
+        return false;
+      }
+      return ref.objectNumber === pageRef.objectNumber && ref.generationNumber === pageRef.generationNumber;
+    });
+    return index >= 0 ? index + 1 : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function updateImportedContractUi() {
+  const draft = state.importedContractDraft;
+  const confirmed = Boolean(elements.importContractConfirmed?.checked);
+  const contractName = sanitizeText(elements.importContractName?.value || draft?.contractName);
+
+  if (!draft) {
+    if (elements.btnSaveImportedContractTemplate) {
+      elements.btnSaveImportedContractTemplate.disabled = true;
+    }
+    return;
+  }
+
+  draft.contractName = contractName || draft.contractName;
+  updateImportedContractSummary(draft);
+  renderImportedContractPreview(draft);
+  renderImportedContractFieldRows(draft);
+
+  if (elements.importContractPdfPreview) {
+    elements.importContractPdfPreview.src = state.importedContractPdfUrl || '';
+  }
+
+  if (elements.btnSaveImportedContractTemplate) {
+    const hasActiveFields = draft.fields.some((field) => !field.removed);
+    elements.btnSaveImportedContractTemplate.disabled = !confirmed || !contractName || !hasActiveFields;
+  }
+}
+
+function updateImportedContractSummary(draft) {
+  const totalFields = draft.fields.length;
+  const activeFields = draft.fields.filter((field) => !field.removed).length;
+  elements.importContractFieldCount.textContent = String(totalFields);
+  elements.importContractPageCount.textContent = String(draft.pageCount || draft.pages.length || 0);
+  elements.importContractActiveFieldCount.textContent = String(activeFields);
+}
+
+function renderImportedContractPreview(draft) {
+  if (!elements.importContractFieldPreview) {
+    return;
+  }
+
+  if (!draft.pages.length) {
+    elements.importContractFieldPreview.innerHTML = '<div class="text-secondary">Nessuna pagina rilevata.</div>';
+    return;
+  }
+
+  elements.importContractFieldPreview.innerHTML = draft.pages.map((page) => {
+    const pageFields = draft.fields.filter((field) => field.pageNumber === page.pageNumber);
+    const aspectRatio = `${page.width} / ${page.height}`;
+    const fieldMarkup = pageFields.map((field) => {
+      const width = page.width ? (field.rect.width / page.width) * 100 : 0;
+      const height = page.height ? (field.rect.height / page.height) * 100 : 0;
+      const left = page.width ? (field.rect.x / page.width) * 100 : 0;
+      const top = page.height ? 100 - ((field.rect.y + field.rect.height) / page.height) * 100 : 0;
+      return `
+        <div
+          class="import-contract-page__field ${field.removed ? 'is-removed' : ''}"
+          style="left:${left}%; top:${top}%; width:${Math.max(width, 3)}%; height:${Math.max(height, 2.2)}%;"
+          title="${escapeHtml(field.customName || field.originalName)}"
+        >
+          <span class="import-contract-page__field-label">${escapeHtml(field.customName || field.originalName)}</span>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="import-contract-page">
+        <div class="import-contract-page__label">
+          <span>Pagina ${page.pageNumber}</span>
+          <span>${pageFields.length} campi</span>
+        </div>
+        <div class="import-contract-page__canvas" style="aspect-ratio:${aspectRatio};">
+          ${fieldMarkup || '<span class="import-contract-page__field-label">Nessun campo in questa pagina</span>'}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderImportedContractFieldRows(draft) {
+  if (!elements.importContractFieldsBody) {
+    return;
+  }
+
+  if (!draft.fields.length) {
+    elements.importContractFieldsBody.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-secondary">Il PDF non contiene campi modulo rilevabili.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  elements.importContractFieldsBody.innerHTML = draft.fields.map((field) => {
+    const positionLabel = `Pag. ${field.pageNumber} • x:${Math.round(field.rect.x)} y:${Math.round(field.rect.y)} • ${Math.round(field.rect.width)}x${Math.round(field.rect.height)}`;
+    return `
+      <tr class="import-contract-table__row ${field.removed ? 'is-removed' : ''}" data-import-field-id="${escapeHtml(field.id)}">
+        <td>
+          <span class="import-contract-table__name">${escapeHtml(field.originalName)}</span>
+          <span class="import-contract-table__meta">${escapeHtml(positionLabel)}</span>
+        </td>
+        <td>
+          <input type="text" class="form-control form-control-sm" data-import-field-prop="customName" value="${escapeHtml(field.customName)}" ${field.removed ? 'disabled' : ''}>
+        </td>
+        <td>
+          <select class="form-select form-select-sm" data-import-field-prop="type" ${field.removed ? 'disabled' : ''}>
+            ${buildImportedFieldTypeOptions(field.type)}
+          </select>
+        </td>
+        <td class="small text-secondary">${escapeHtml(positionLabel)}</td>
+        <td>
+          <input type="text" class="form-control form-control-sm" data-import-field-prop="category" value="${escapeHtml(field.category)}" ${field.removed ? 'disabled' : ''}>
+        </td>
+        <td>
+          <input type="text" class="form-control form-control-sm" data-import-field-prop="description" value="${escapeHtml(field.description)}" ${field.removed ? 'disabled' : ''}>
+        </td>
+        <td>
+          <button type="button" class="btn btn-sm ${field.removed ? 'btn-outline-success' : 'btn-outline-danger'}" data-import-field-toggle>
+            ${field.removed ? 'Ripristina' : 'Escludi'}
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  elements.importContractFieldsBody.querySelectorAll('[data-import-field-id]').forEach((row) => {
+    const fieldId = row.dataset.importFieldId;
+    row.querySelectorAll('[data-import-field-prop]').forEach((input) => {
+      const prop = input.dataset.importFieldProp;
+      if (input.tagName === 'SELECT') {
+        input.addEventListener('change', () => updateImportedFieldDraft(fieldId, prop, input.value));
+        return;
+      }
+      input.addEventListener('input', () => updateImportedFieldDraft(fieldId, prop, input.value, { rerender: false }));
+      input.addEventListener('change', () => updateImportedFieldDraft(fieldId, prop, input.value));
+    });
+    row.querySelector('[data-import-field-toggle]')?.addEventListener('click', () => toggleImportedFieldRemoved(fieldId));
+  });
+}
+
+function buildImportedFieldTypeOptions(selectedValue) {
+  const types = ['text', 'checkbox', 'radio', 'dropdown', 'option-list', 'date', 'signature', 'button', 'unknown'];
+  const selected = sanitizeText(selectedValue);
+  return types.map((type) => `<option value="${escapeHtml(type)}"${type === selected ? ' selected' : ''}>${escapeHtml(type)}</option>`).join('');
+}
+
+function updateImportedFieldDraft(fieldId, prop, value, { rerender = true } = {}) {
+  const draft = state.importedContractDraft;
+  if (!draft) {
+    return;
+  }
+  const field = draft.fields.find((item) => item.id === fieldId);
+  if (!field) {
+    return;
+  }
+  field[prop] = value;
+  if (rerender) {
+    updateImportedContractUi();
+  }
+}
+
+function toggleImportedFieldRemoved(fieldId) {
+  const draft = state.importedContractDraft;
+  if (!draft) {
+    return;
+  }
+  const field = draft.fields.find((item) => item.id === fieldId);
+  if (!field) {
+    return;
+  }
+  field.removed = !field.removed;
+  updateImportedContractUi();
+}
+
+async function saveImportedContractTemplateFlow() {
+  const draft = state.importedContractDraft;
+  if (!draft) {
+    return;
+  }
+
+  const contractName = sanitizeText(elements.importContractName?.value || draft.contractName);
+  const approvedFields = draft.fields
+    .filter((field) => !field.removed)
+    .map((field) => ({
+      originalName: sanitizeText(field.originalName),
+      customName: sanitizeText(field.customName) || sanitizeText(field.originalName),
+      type: sanitizeText(field.type) || 'unknown',
+      pageNumber: Number(field.pageNumber) || 1,
+      coordinates: {
+        x: Number(field.rect.x) || 0,
+        y: Number(field.rect.y) || 0,
+        width: Number(field.rect.width) || 0,
+        height: Number(field.rect.height) || 0,
+      },
+      category: sanitizeText(field.category),
+      description: sanitizeText(field.description),
+    }));
+
+  if (!contractName) {
+    setStatus('Inserisci il nome del contratto prima del salvataggio.', 'warning');
+    return;
+  }
+  if (!approvedFields.length) {
+    setStatus('Mantieni almeno un campo attivo prima del salvataggio.', 'warning');
+    return;
+  }
+  if (!elements.importContractConfirmed?.checked) {
+    setStatus('Conferma i campi rilevati prima del salvataggio.', 'warning');
+    return;
+  }
+
+  try {
+    elements.importContractStatus.textContent = 'Salvataggio del template importato...';
+
+    const params = new URLSearchParams({
+      templateHash: draft.templateHash,
+      contractType: draft.contractType,
+      templateName: draft.fileName,
+    });
+    const templateResponse = await fetch(`/api/templates?${params}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/pdf',
+        'x-template-hash': draft.templateHash,
+      },
+      body: draft.bytes,
+    });
+    if (!templateResponse.ok) {
+      const body = await safeJson(templateResponse);
+      throw new Error(body?.error || 'Errore salvataggio PDF originale nel database.');
+    }
+
+    const metadata = {
+      pageCount: draft.pageCount,
+      fieldCount: approvedFields.length,
+      originalFieldCount: draft.fields.length,
+      sourceFileName: draft.fileName,
+      importedAt: new Date().toISOString(),
+    };
+    const response = await fetch('/api/imported-contract-templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: draft.id,
+        contractType: draft.contractType,
+        contractName,
+        templateHash: draft.templateHash,
+        templateName: draft.fileName,
+        fields: approvedFields,
+        metadata,
+      }),
+    });
+    if (!response.ok) {
+      const body = await safeJson(response);
+      throw new Error(body?.error || 'Errore salvataggio configurazione template.');
+    }
+
+    const saved = await response.json();
+    draft.id = sanitizeText(saved.id) || draft.id;
+    draft.contractName = contractName;
+    elements.importContractStatus.textContent = 'Configurazione salvata correttamente nel database.';
+    setStatus(`Template importato salvato: ${contractName}`, 'success');
+  } catch (error) {
+    elements.importContractStatus.textContent = error.message || 'Errore salvataggio template importato.';
+    setStatus(elements.importContractStatus.textContent, 'danger');
+  }
 }
 
 function renderStepper() {
@@ -517,7 +1080,10 @@ function syncOperationalAddressFields() {
 }
 
 function handleContractTypeChange() {
-  resetTemplateSelection({ silent: true });
+  state.selectedTemplateFile = null;
+  state.selectedTemplateName = '';
+  state.selectedTemplateSource = 'auto';
+  state.selectedTemplateDbHash = '';
   state.currentTemplateHash = '';
   state.currentTemplateBytes = null;
   state.templateMapping = null;
@@ -526,7 +1092,6 @@ function handleContractTypeChange() {
   state.currentContractName = '';
   state.contractsCache = [];
   state.savedTemplatesCache = [];
-  updateTemplateInfo();
   resetGeneratedPdf();
   triggerAutosave();
   refreshUi();
@@ -693,7 +1258,6 @@ function handleNewForm() {
   state.selectedTemplateDbHash = '';
   state.currentContractId = '';
   state.currentContractName = '';
-  elements.templateFile.value = '';
   elements.contractType.value = 'pvr-vincitu';
   document.getElementById('roleLegale').checked = true;
   setDefaultDates();
@@ -702,7 +1266,6 @@ function handleNewForm() {
   clearSignatureCanvas({ silent: true });
   toggleCriminalFields();
   resetGeneratedPdf();
-  updateTemplateInfo();
   state.currentStep = 0;
   refreshUi();
   saveToLocalStorage({ silent: true });
@@ -721,9 +1284,6 @@ function saveToLocalStorage({ silent = false } = {}) {
   const payload = collectFormData();
   payload.signatureDataUrl = state.signatureDataUrl;
   payload.currentStep = state.currentStep;
-  payload.selectedTemplateName = state.selectedTemplateName;
-  payload.selectedTemplateSource = state.selectedTemplateSource;
-  payload.selectedTemplateDbHash = state.selectedTemplateDbHash;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   updateAutosaveIndicator('saved');
   if (!silent) {
@@ -750,14 +1310,16 @@ function loadFromLocalStorage({ silent = false, notifyIfMissing = true } = {}) {
     } else {
       clearSignatureCanvas({ silent: true });
     }
-    state.selectedTemplateName = sanitizeText(data.selectedTemplateName);
-    state.selectedTemplateSource = sanitizeText(data.selectedTemplateSource) || 'auto';
-    state.selectedTemplateDbHash = sanitizeText(data.selectedTemplateDbHash);
+    state.selectedTemplateFile = null;
+    state.selectedTemplateName = '';
+    state.selectedTemplateSource = 'auto';
+    state.selectedTemplateDbHash = '';
+    state.currentTemplateHash = '';
+    state.currentTemplateBytes = null;
     updateDocumentUploadsMeta();
     toggleCriminalFields();
     clearValidation();
     resetGeneratedPdf();
-    updateTemplateInfo();
     state.currentStep = clampStep(Number(data.currentStep) || 0);
     refreshUi();
     updateAutosaveIndicator('saved');
@@ -1392,9 +1954,6 @@ function buildContractPayload() {
   const payload = collectFormData();
   payload.signatureDataUrl = state.signatureDataUrl;
   payload.currentStep = state.currentStep;
-  payload.selectedTemplateName = state.selectedTemplateName;
-  payload.selectedTemplateSource = state.selectedTemplateSource;
-  payload.selectedTemplateDbHash = state.selectedTemplateDbHash;
   payload.contractType = elements.contractType.value;
   payload.appVersion = APP_VERSION;
   return payload;
@@ -1568,12 +2127,14 @@ function applyContractPayload(row) {
   state.signatureDataUrl = '';
 
   elements.contractType.value = contractType;
-  resetTemplateSelection({ silent: true });
+  state.selectedTemplateFile = null;
+  state.selectedTemplateName = '';
+  state.selectedTemplateSource = 'auto';
+  state.selectedTemplateDbHash = '';
   state.currentTemplateHash = '';
   state.currentTemplateBytes = null;
   state.templateMapping = null;
   state.mappingDraft = null;
-  updateTemplateInfo();
 
   populateForm(payload);
   if (payload.signatureDataUrl) {
@@ -1582,10 +2143,6 @@ function applyContractPayload(row) {
     elements.signatureInfo.textContent = 'Firma ripristinata dal contratto salvato.';
   }
 
-  state.selectedTemplateName = sanitizeText(payload.selectedTemplateName);
-  state.selectedTemplateSource = sanitizeText(payload.selectedTemplateSource) || 'auto';
-  state.selectedTemplateDbHash = sanitizeText(payload.selectedTemplateDbHash);
-  updateTemplateInfo();
   state.currentStep = clampStep(Number(payload.currentStep) || 0);
   state.currentContractId = sanitizeText(row.id);
   state.currentContractName = sanitizeText(row.name);

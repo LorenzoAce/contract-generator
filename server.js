@@ -4,10 +4,13 @@ const {
   checkHealth,
   deleteContract,
   getContract,
+  getImportedContractTemplate,
   getPdfTemplate,
   listContracts,
+  listImportedContractTemplates,
   listPdfTemplates,
   saveContract,
+  saveImportedContractTemplate,
   savePdfTemplate,
   getTemplateMapping,
   saveTemplateMapping,
@@ -96,6 +99,39 @@ app.get('/api/templates/:hash', async (req, res) => {
     res.status(200).send(row.bytes);
   } catch (error) {
     const statusCode = error.message.endsWith('richiesto') ? 400 : error.message.includes('Database non configurato') ? 503 : 500;
+    res.status(statusCode).json({ error: error.message || 'Errore database' });
+  }
+});
+
+app.get('/api/imported-contract-templates', async (req, res) => {
+  try {
+    const items = await listImportedContractTemplates({ contractType: req.query.contractType });
+    res.json({ items });
+  } catch (error) {
+    const statusCode = error.message.includes('Database non configurato') ? 503 : 500;
+    res.status(statusCode).json({ error: error.message || 'Errore database' });
+  }
+});
+
+app.get('/api/imported-contract-templates/:id', async (req, res) => {
+  try {
+    const row = await getImportedContractTemplate({ id: req.params.id });
+    if (!row) {
+      res.status(404).json({ error: 'Template importato non trovato' });
+      return;
+    }
+    res.json(row);
+  } catch (error) {
+    const statusCode = error.message.endsWith('richiesto') ? 400 : error.message.includes('Database non configurato') ? 503 : 500;
+    res.status(statusCode).json({ error: error.message || 'Errore database' });
+  }
+});
+
+app.post('/api/imported-contract-templates', async (req, res) => {
+  try {
+    res.json(await saveImportedContractTemplate(req.body || {}));
+  } catch (error) {
+    const statusCode = error.message.includes('sono richiesti') ? 400 : error.message.includes('Database non configurato') ? 503 : 500;
     res.status(statusCode).json({ error: error.message || 'Errore database' });
   }
 });

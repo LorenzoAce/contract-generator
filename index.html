@@ -27,7 +27,7 @@
               <path d="M27 34h12M27 41h12" fill="none" stroke="#6f42c1" stroke-width="4" stroke-linecap="round"></path>
             </svg>
           </div><div class="brand-copy">
-            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.15</span></h1>
+            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.16</span></h1>
             <p class="hero-copy mb-0">Compilazione guidata del contratto e degli allegati in pochi passaggi.</p>
           </div>
         </div>
@@ -48,10 +48,10 @@
               <span>Menu</span>
             </button>
             <div class="dropdown-menu dropdown-menu-end header-menu__list">
-              <button type="button" class="dropdown-item" id="btnNuovo">Nuovo</button>
+              <button type="button" class="dropdown-item" id="btnNuovo">Reset</button>
+              <button type="button" class="dropdown-item" id="btnImportContractPdf" data-bs-toggle="modal" data-bs-target="#importContractModal">Importa Contratto PDF</button>
               <button type="button" class="dropdown-item" id="btnSalva">Salva</button>
               <button type="button" class="dropdown-item" id="btnCarica">Carica</button>
-              <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#templateModal">Template PDF</button>
             </div>
           </div>
         </div>
@@ -608,122 +608,112 @@
     </div>
   </div>
 
-  <div class="modal fade" id="templateModal" tabindex="-1" aria-labelledby="templateModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content border-0 shadow-lg">
-        <div class="modal-header border-0 pb-0">
-          <div>
-            <div class="eyebrow text-dark mb-2">Template PDF</div>
-            <h2 class="h4 mb-1" id="templateModalLabel">Selezione template</h2>
-            <p class="text-secondary mb-0">Scegli manualmente il PDF da usare oppure lascia la ricerca automatica nella cartella del contratto selezionato.</p>
-          </div>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
-        </div>
-        <div class="modal-body pt-3">
-          <div class="surface-panel">
-            <label for="templateFile" class="form-label">Template PDF locale</label>
-            <input class="form-control" type="file" id="templateFile" accept=".pdf,application/pdf">
-            <div class="form-text">Per ora il contratto `PVR Vincitu` cerca il template nella cartella dedicata `templates/pvr-vincitu`.</div>
-            <div class="small text-secondary mt-3" id="templateInfo">Template automatico: in attesa di verifica.</div>
-          </div>
-          <div class="surface-panel mt-3">
-            <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center justify-content-between">
-              <div>
-                <div class="form-label mb-1">Template salvati (database)</div>
-                <div class="form-text">Puoi salvare un template PDF nel database e riutilizzarlo senza ricaricare il file.</div>
-              </div>
-              <button type="button" class="btn btn-outline-secondary btn-sm" id="btnRefreshSavedTemplates">Aggiorna lista</button>
-            </div>
-            <select class="form-select mt-2" id="savedTemplatesSelect">
-              <option value="">— Nessun template caricato —</option>
-            </select>
-            <div class="d-flex gap-2 mt-2">
-              <button type="button" class="btn btn-outline-primary" id="btnUseSavedTemplate">Usa dal database</button>
-            </div>
-            <div class="small text-secondary mt-2" id="templateDbStatus">Pronto.</div>
-          </div>
-        </div>
-        <div class="modal-footer border-0 pt-0">
-          <button type="button" class="btn btn-outline-secondary" id="btnOpenMapping">Mappa campi</button>
-          <button type="button" class="btn btn-outline-primary" id="btnSaveTemplateToDb">Salva nel database</button>
-          <button type="button" class="btn btn-outline-secondary" id="btnResetTemplate">Usa automatico</button>
-          <button type="button" class="btn btn-primary" id="btnUsaTemplate" data-bs-dismiss="modal">Usa template selezionato</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal fade" id="mappingModal" tabindex="-1" aria-labelledby="mappingModalLabel" aria-hidden="true">
+  <div class="modal fade" id="importContractModal" tabindex="-1" aria-labelledby="importContractModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable modal-xl">
       <div class="modal-content border-0 shadow-lg">
         <div class="modal-header border-0 pb-0">
           <div>
-            <div class="eyebrow text-dark mb-2">Template PDF</div>
-            <h2 class="h4 mb-1" id="mappingModalLabel">Mappatura campi</h2>
-            <p class="text-secondary mb-0">Associa i campi del wizard ai campi compilabili del template (AcroForm). La mappa viene salvata nel database e riutilizzata quando riconosce lo stesso template.</p>
+            <div class="eyebrow text-dark mb-2">Contratti PDF</div>
+            <h2 class="h4 mb-1" id="importContractModalLabel">Importa Contratto PDF</h2>
+            <p class="text-secondary mb-0">Carica un PDF compilabile preparato in Adobe Acrobat, analizza automaticamente i campi e salva la configurazione approvata nel database.</p>
           </div>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
         </div>
         <div class="modal-body pt-3">
-          <div class="surface-panel mb-3">
-            <div class="d-flex flex-column flex-lg-row gap-3 align-items-lg-center justify-content-between">
-              <div class="small text-secondary" id="mappingTemplateInfo">Template: non caricato.</div>
-              <div class="input-group" style="max-width: 420px;">
-                <span class="input-group-text">Filtro</span>
-                <input type="text" class="form-control" id="mappingFilter" placeholder="Cerca per nome campo...">
+          <div class="row g-3">
+            <div class="col-12 col-lg-4">
+              <div class="surface-panel h-100">
+                <div class="section-heading">Caricamento</div>
+                <label for="importContractFile" class="form-label required">PDF compilabile</label>
+                <input class="form-control" type="file" id="importContractFile" accept=".pdf,application/pdf">
+                <div class="form-text">Il PDF deve contenere campi modulo AcroForm gia preparati.</div>
+
+                <label for="importContractName" class="form-label required mt-3">Nome contratto</label>
+                <input type="text" class="form-control" id="importContractName" placeholder="Es. Contratto Distribuzione 2026">
+
+                <div class="d-grid gap-2 mt-3">
+                  <button type="button" class="btn btn-outline-primary" id="btnReanalyzeImportContract">Rianalizza PDF</button>
+                </div>
+
+                <div class="small text-secondary mt-3" id="importContractStatus">Seleziona un PDF per iniziare.</div>
+
+                <div class="import-contract-summary mt-3" id="importContractSummary">
+                  <div class="import-contract-summary__item">
+                    <span class="import-contract-summary__label">Campi</span>
+                    <strong id="importContractFieldCount">0</strong>
+                  </div>
+                  <div class="import-contract-summary__item">
+                    <span class="import-contract-summary__label">Pagine</span>
+                    <strong id="importContractPageCount">0</strong>
+                  </div>
+                  <div class="import-contract-summary__item">
+                    <span class="import-contract-summary__label">Attivi</span>
+                    <strong id="importContractActiveFieldCount">0</strong>
+                  </div>
+                </div>
+
+                <div class="form-check mt-3">
+                  <input class="form-check-input" type="checkbox" id="importContractConfirmed">
+                  <label class="form-check-label" for="importContractConfirmed">Confermo i campi rilevati e la configurazione prima del salvataggio.</label>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="row g-3">
-            <div class="col-12 col-lg-7">
+            <div class="col-12 col-lg-8">
+              <div class="surface-panel h-100">
+                <div class="section-heading">Anteprima Contratto</div>
+                <div class="row g-3">
+                  <div class="col-12 col-xl-6">
+                    <div class="import-contract-preview">
+                      <div class="import-contract-preview__label">PDF originale</div>
+                      <iframe id="importContractPdfPreview" class="import-contract-preview__frame" title="Anteprima PDF importato"></iframe>
+                    </div>
+                  </div>
+                  <div class="col-12 col-xl-6">
+                    <div class="import-contract-preview">
+                      <div class="import-contract-preview__label">Campi individuati</div>
+                      <div class="import-contract-pages" id="importContractFieldPreview"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12">
               <div class="surface-panel">
-                <div class="section-heading mb-2">Campi testo</div>
+                <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center justify-content-between mb-3">
+                  <div>
+                    <div class="section-heading mb-1">Campi Rilevati</div>
+                    <div class="form-text">Puoi rinominare i campi, cambiare il tipo logico, aggiungere note/categorie o escluderli dal template salvato.</div>
+                  </div>
+                </div>
                 <div class="table-responsive">
-                  <table class="table table-sm align-middle mb-0">
+                  <table class="table table-sm align-middle mb-0 import-contract-table">
                     <thead>
                       <tr>
-                        <th style="width: 45%;">Campo wizard</th>
-                        <th style="width: 55%;">Campo PDF</th>
+                        <th>Campo originale</th>
+                        <th>Nome personalizzato</th>
+                        <th>Tipo</th>
+                        <th>Posizione</th>
+                        <th>Categoria</th>
+                        <th>Descrizione</th>
+                        <th>Azione</th>
                       </tr>
                     </thead>
-                    <tbody id="mappingTextBody"></tbody>
+                    <tbody id="importContractFieldsBody">
+                      <tr>
+                        <td colspan="7" class="text-secondary">Nessun PDF analizzato.</td>
+                      </tr>
+                    </tbody>
                   </table>
                 </div>
               </div>
             </div>
-
-            <div class="col-12 col-lg-5">
-              <div class="surface-panel">
-                <div class="section-heading mb-2">Checkbox / Firma</div>
-                <div class="vstack gap-3">
-                  <div>
-                    <div class="form-label mb-1">Ruolo (radio)</div>
-                    <div id="mappingRoleBody" class="vstack gap-2"></div>
-                  </div>
-                  <div>
-                    <div class="form-label mb-1">Regime fiscale (radio)</div>
-                    <div id="mappingFiscalBody" class="vstack gap-2"></div>
-                  </div>
-                  <div>
-                    <label for="mappingCriminalNulla" class="form-label mb-1">Checkbox “nulla”</label>
-                    <select class="form-select form-select-sm" id="mappingCriminalNulla"></select>
-                  </div>
-                  <div>
-                    <label for="mappingSignatureAnchor" class="form-label mb-1">Campo ancora firma</label>
-                    <select class="form-select form-select-sm" id="mappingSignatureAnchor"></select>
-                    <div class="form-text">Serve per posizionare la firma usando il rettangolo del campo nel PDF.</div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
-
-          <div class="alert alert-info mt-3 mb-0" id="mappingStatus">Pronto.</div>
         </div>
         <div class="modal-footer border-0 pt-0">
-          <button type="button" class="btn btn-outline-secondary" id="btnResetMapping">Ripristina default</button>
-          <button type="button" class="btn btn-primary" id="btnSaveMapping">Salva mappa</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Chiudi</button>
+          <button type="button" class="btn btn-primary" id="btnSaveImportedContractTemplate" disabled>Salva configurazione nel database</button>
         </div>
       </div>
     </div>

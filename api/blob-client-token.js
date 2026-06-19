@@ -16,6 +16,10 @@ module.exports = async function handler(req, res) {
     res.status(503).json({ error: 'Vercel Blob non configurato. Imposta BLOB_READ_WRITE_TOKEN.' });
     return;
   }
+  if (!blobStoreId) {
+    res.status(503).json({ error: 'Vercel Blob non configurato. Imposta anche BLOB_STORE_ID.' });
+    return;
+  }
 
   try {
     const requestBody = getRequestJsonBody(req);
@@ -26,6 +30,7 @@ module.exports = async function handler(req, res) {
 
     const clientToken = await generateClientTokenFromReadWriteToken({
       token: blobToken,
+      storeId: blobStoreId,
       pathname,
       allowedContentTypes: ['application/pdf'],
       maximumSizeInBytes: MAX_IMPORTED_CONTRACT_SIZE_BYTES,

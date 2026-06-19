@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.20';
+const APP_VERSION = '1.21';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const CONTRACT_TEMPLATES = {
@@ -913,7 +913,7 @@ async function probeBlobUploadRoute(draft) {
       type: 'blob.generate-client-token',
       payload: {
         pathname,
-        multipart: true,
+        multipart: false,
         clientPayload: buildBlobUploadClientPayload(draft),
       },
     }),
@@ -964,7 +964,6 @@ async function uploadImportedContractPdfViaBlob(draft) {
     const blob = await upload(buildImportedContractBlobPath(draft), draft.sourceFile, {
       access: 'public',
       handleUploadUrl: '/api/blob-upload',
-      multipart: true,
       clientPayload: buildBlobUploadClientPayload(draft),
       onUploadProgress: ({ loaded, total, percentage }) => {
         const resolvedTotal = Number(total) || Number(draft.sourceFile?.size) || 0;

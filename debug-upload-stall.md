@@ -19,6 +19,7 @@ Status: OPEN
 - Evidenza 2: prima del fix compariva il warning runtime di Blob su `onUploadCompleted` senza callback URL determinabile.
 - Evidenza 3: dopo la rimozione di `onUploadCompleted`, il warning sparisce; resta solo l'errore atteso `Invalid token parameter` dovuto al token fittizio usato nel test.
 - Evidenza 4: aggiunto un probe esplicito lato client verso `/api/blob-upload` prima dell'upload reale e uno stato di avanzamento percentuale per distinguere fra blocco nel token exchange e blocco nel trasferimento verso Blob.
+- Evidenza 5: il probe passa in produzione e l'interfaccia resta ferma su `Endpoint Blob verificato. Avvio upload diretto...`, quindi il blocco e' dopo il token exchange e prima dell'avanzamento trasferimento. Fix minimo applicato: disattivazione del ramo `multipart` lato client per usare upload diretto standard verso Blob.
 
 ## Hypothesis Status
 - H1: Respinta. Il body arriva nel formato atteso.
@@ -26,3 +27,4 @@ Status: OPEN
 - H3: Non ancora determinata con prova locale reale; richiede test con token Blob valido in deploy.
 - H4: Non supportata dalle prove raccolte finora.
 - H5: Confermata in parte. La fase critica era il callback automatico di completion, non il parsing iniziale della request.
+- H2: Rafforzata. Le prove puntano ora al ramo multipart del trasferimento client → Blob come causa piu probabile del blocco.

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.18';
+const APP_VERSION = '1.19';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const CONTRACT_TEMPLATES = {
@@ -872,6 +872,24 @@ function buildImportedContractBlobPath(draft) {
   return `imported-contracts/${contractType || 'generic'}/${templateHash || generateId()}.pdf`;
 }
 
+// #region debug-point A:blob-client-report
+function reportUploadDebug(hypothesisId, msg, data) {
+  fetch('http://127.0.0.1:7777/event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: 'upload-stall',
+      runId: 'pre-fix',
+      hypothesisId,
+      location: 'app.js:blob-upload',
+      msg: `[DEBUG] ${msg}`,
+      data,
+      ts: Date.now(),
+    }),
+  }).catch(() => {});
+}
+// #endregion
+
 async function uploadImportedContractPdfViaBlob(draft) {
   if (!draft?.sourceFile) {
     throw new Error('File PDF originale non disponibile. Ricarica il contratto e riprova.');
@@ -886,6 +904,14 @@ async function uploadImportedContractPdfViaBlob(draft) {
   }
 
   try {
+    // #region debug-point A:blob-client-start
+    reportUploadDebug('A', 'client upload start', {
+      fileName: draft.fileName,
+      fileSize: Number(draft.sourceFile?.size) || 0,
+      contentType: draft.contentType || '',
+      pathname: buildImportedContractBlobPath(draft),
+    });
+    // #endregion
     const blob = await upload(buildImportedContractBlobPath(draft), draft.sourceFile, {
       access: 'public',
       handleUploadUrl: '/api/blob-upload',
@@ -897,6 +923,15 @@ async function uploadImportedContractPdfViaBlob(draft) {
       }),
     });
 
+    // #region debug-point B:blob-client-success
+    reportUploadDebug('B', 'client upload success', {
+      url: blob.url || '',
+      pathname: blob.pathname || '',
+      size: Number(blob.size) || 0,
+      contentType: blob.contentType || '',
+    });
+    // #endregion
+
     return {
       storageMode: 'vercel-blob',
       url: blob.url,
@@ -907,8 +942,14 @@ async function uploadImportedContractPdfViaBlob(draft) {
       uploadedAt: new Date().toISOString(),
     };
   } catch (error) {
-    console.error(error);
     const message = sanitizeText(error?.message);
+    // #region debug-point D:blob-client-error
+    reportUploadDebug('D', 'client upload error', {
+      message,
+      name: sanitizeText(error?.name),
+      stackTop: sanitizeText(String(error?.stack || '').split('\n')[0] || ''),
+    });
+    // #endregion
     if (message.includes('BLOB_READ_WRITE_TOKEN') || message.includes('BLOB_STORE_ID') || message.includes('Blob')) {
       throw new Error('Vercel Blob non e configurato correttamente. Verifica BLOB_READ_WRITE_TOKEN e, se presente nel progetto, anche BLOB_STORE_ID.');
     }

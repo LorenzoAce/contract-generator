@@ -1,0 +1,27 @@
+# Debug Session: upload-stall
+
+Status: OPEN
+
+## Symptom
+- L'upload del PDF grande si blocca ancora durante il salvataggio del template importato.
+
+## Hypotheses
+- H1: La route `api/blob-upload` non riceve il body nel formato atteso.
+- H2: Il flusso multipart di Blob non completa correttamente il token exchange o il completion callback.
+- H3: La configurazione ambiente Blob e' incoerente rispetto allo store collegato.
+- H4: Il client fallisce nella chiamata a `/api/blob-upload` o nell'import dinamico del modulo Blob.
+- H5: La function serverless risponde con un payload/headers non compatibili con `handleUpload`.
+
+## Evidence Log
+- Debug collector fallback Node avviato su `http://127.0.0.1:7777/event`.
+- Harness locale eseguito contro `api/blob-upload` con body `blob.generate-client-token`.
+- Evidenza 1: la route entra correttamente e il body viene parsato (`bodyType=blob.generate-client-token`, payload presente).
+- Evidenza 2: prima del fix compariva il warning runtime di Blob su `onUploadCompleted` senza callback URL determinabile.
+- Evidenza 3: dopo la rimozione di `onUploadCompleted`, il warning sparisce; resta solo l'errore atteso `Invalid token parameter` dovuto al token fittizio usato nel test.
+
+## Hypothesis Status
+- H1: Respinta. Il body arriva nel formato atteso.
+- H2: Parzialmente confermata. Il completion callback non usato introduceva dipendenza non necessaria nel token exchange.
+- H3: Non ancora determinata con prova locale reale; richiede test con token Blob valido in deploy.
+- H4: Non supportata dalle prove raccolte finora.
+- H5: Confermata in parte. La fase critica era il callback automatico di completion, non il parsing iniziale della request.

@@ -1,6 +1,27 @@
 const { handleUpload } = require('@vercel/blob/client');
 const MAX_IMPORTED_CONTRACT_SIZE_BYTES = 100 * 1024 * 1024;
 
+// #region debug-point C:blob-server-report
+function reportBlobRouteDebug(hypothesisId, msg, data) {
+  if (typeof fetch !== 'function') {
+    return;
+  }
+  fetch('http://127.0.0.1:7777/event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: 'upload-stall',
+      runId: 'pre-fix',
+      hypothesisId,
+      location: 'api/blob-upload.js',
+      msg: `[DEBUG] ${msg}`,
+      data,
+      ts: Date.now(),
+    }),
+  }).catch(() => {});
+}
+// #endregion
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -18,6 +39,14 @@ module.exports = async function handler(req, res) {
 
   try {
     const requestBody = getRequestJsonBody(req);
+    // #region debug-point C:blob-server-entry
+    reportBlobRouteDebug('C', 'blob route entry', {
+      bodyType: sanitizeEnv(requestBody?.type || ''),
+      hasPayload: Boolean(requestBody?.payload),
+      hasClientPayload: Boolean(requestBody?.payload?.clientPayload),
+      blobStoreId: blobStoreId || '',
+    });
+    // #endregion
     const jsonResponse = await handleUpload({
       token: blobToken,
       body: requestBody,
@@ -42,11 +71,22 @@ module.exports = async function handler(req, res) {
           }),
         };
       },
-      onUploadCompleted: async () => {},
     });
 
+    // #region debug-point B:blob-server-success
+    reportBlobRouteDebug('B', 'blob route success', {
+      responseType: sanitizeEnv(jsonResponse?.type || ''),
+      responseKeys: Object.keys(jsonResponse || {}),
+    });
+    // #endregion
     res.status(200).json(jsonResponse);
   } catch (error) {
+    // #region debug-point E:blob-server-error
+    reportBlobRouteDebug('E', 'blob route error', {
+      message: sanitizeEnv(error?.message || ''),
+      name: sanitizeEnv(error?.name || ''),
+    });
+    // #endregion
     const statusCode = String(error?.message || '').includes('non consentito') ? 400 : 500;
     res.status(statusCode).json({ error: error?.message || 'Errore upload Blob.' });
   }

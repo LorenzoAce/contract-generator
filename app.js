@@ -1615,6 +1615,7 @@ function handleFormInteraction(event) {
   }
 
   if (target.matches('input, textarea, select')) {
+    normalizeInputCase(target);
     if (target.name === 'salesContact' || target.name === 'presentedBy') {
       syncPresentedByFields({ sourceName: target.name });
     }
@@ -1993,7 +1994,12 @@ function collectFormData() {
     if (value instanceof File) {
       continue;
     }
-    data[key] = value;
+    const fieldEl = elements.form.querySelector(`[name="${CSS.escape(key)}"]`);
+    if (!fieldEl || fieldEl.matches('select, input[type="checkbox"], input[type="radio"]') || fieldEl.type === 'date') {
+      data[key] = value;
+    } else {
+      data[key] = normalizeValueCase(value, { key, inputType: fieldEl.type });
+    }
   }
 
   elements.form.querySelectorAll('[data-imported-contract-input="true"]').forEach((field) => {
@@ -2004,7 +2010,11 @@ function collectFormData() {
       data[field.name] = Boolean(field.checked);
       return;
     }
-    data[field.name] = field.value ?? '';
+    if (field.matches('select') || field.type === 'date') {
+      data[field.name] = field.value ?? '';
+      return;
+    }
+    data[field.name] = normalizeValueCase(field.value ?? '', { key: field.name, inputType: field.type });
   });
 
   data.roleType = document.querySelector('input[name="roleType"]:checked')?.value || 'legale-rappresentante';
@@ -3752,7 +3762,7 @@ async function fillTemplate(templateBytes, data) {
     const value = Object.prototype.hasOwnProperty.call(computedValues, sourceKey)
       ? computedValues[sourceKey]
       : formatFieldValue(sourceKey, data[sourceKey]);
-    setTextWithAutoFit(field, value, font);
+    setTextWithAutoFit(field, normalizeTextCaseForField(value, { key: sourceKey, fieldName: trimmedFieldName }), font);
   });
 
   if (issueDateValue) {
@@ -3789,12 +3799,16 @@ async function fillNovapayTemplate(pdfDoc, form, fields, data, font) {
     const value = sourceKey === 'birthDate'
       ? formatDate(data[sourceKey])
       : sanitizeText(data[sourceKey]);
-    setTextWithAutoFit(pdfField, value, font);
+    setTextWithAutoFit(pdfField, normalizeTextCaseForField(value, { key: sourceKey, fieldName }), font);
   });
 
   const representativeField = fields.get('nome-e-cognome-titolare');
   if (representativeField && typeof representativeField.setText === 'function') {
-    setTextWithAutoFit(representativeField, representativeFullName, font);
+    setTextWithAutoFit(
+      representativeField,
+      normalizeTextCaseForField(representativeFullName, { key: 'representativeFullName', fieldName: 'nome-e-cognome-titolare' }),
+      font,
+    );
   }
 
   NOVAPAY_COMPANY_TYPE_FIELDS.forEach((fieldName) => {
@@ -3833,6 +3847,66 @@ function formatFieldValue(sourceKey, rawValue) {
 
 function sanitizeText(value) {
   return String(value || '').trim();
+}
+
+function isEmailLikeIdentifier(value) {
+  const normalized = sanitizeText(value).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return normalized === 'email'
+    || normalized.includes('email')
+    || normalized === 'pec'
+    || normalized.includes('pec');
+}
+
+function normalizeTextCaseForField(value, { key, fieldName } = {}) {
+  const text = sanitizeText(value);
+  if (!text) {
+    return '';
+  }
+  if (isEmailLikeIdentifier(key) || isEmailLikeIdentifier(fieldName)) {
+    return text.toLowerCase();
+  }
+  return text.toUpperCase();
+}
+
+function normalizeValueCase(value, { key, inputType } = {}) {
+  const text = sanitizeText(value);
+  if (!text) {
+    return '';
+  }
+  if (sanitizeText(inputType).toLowerCase() === 'date') {
+    return text;
+  }
+  if (isEmailLikeIdentifier(key) || sanitizeText(inputType).toLowerCase() === 'email') {
+    return text.toLowerCase();
+  }
+  return text.toUpperCase();
+}
+
+function normalizeInputCase(input) {
+  if (!input || input.disabled) {
+    return;
+  }
+  if (!input.matches('input, textarea')) {
+    return;
+  }
+  if (input.type === 'file' || input.type === 'checkbox' || input.type === 'radio' || input.type === 'date') {
+    return;
+  }
+
+  const normalized = normalizeValueCase(input.value, { key: input.name || input.id, inputType: input.type });
+  if (normalized === input.value) {
+    return;
+  }
+
+  const selectionStart = typeof input.selectionStart === 'number' ? input.selectionStart : null;
+  const selectionEnd = typeof input.selectionEnd === 'number' ? input.selectionEnd : null;
+  input.value = normalized;
+  if (selectionStart !== null && selectionEnd !== null && typeof input.setSelectionRange === 'function') {
+    input.setSelectionRange(selectionStart, selectionEnd);
+  }
 }
 
 function formatDate(value) {
@@ -3915,10 +3989,10 @@ function setTextWithAutoFit(field, value, font, options = {}) {
   }
 
   const maxFontSize = Number.isFinite(options.maxFontSize) ? options.maxFontSize : 10;
-  const minFontSize = Number.isFinite(options.minFontSize) ? options.minFontSize : 7;
-  const allowTruncate = options.allowTruncate !== false;
+  const minFontSize = Number.isFinite(options.minFontSize) ? options.minFontSize : 3;
+  const allowTruncate = options.allowTruncate === true;
   const minWidgetWidth = getMinWidgetWidth(field);
-  const usableWidth = typeof minWidgetWidth === 'number' ? Math.max(0, minWidgetWidth - 3) : null;
+  const usableWidth = typeof minWidgetWidth === 'number' ? Math.max(0, minWidgetWidth - 6) : null;
 
   if (!usableWidth || !font || typeof font.widthOfTextAtSize !== 'function' || typeof field.setFontSize !== 'function') {
     field.setText(text);
@@ -3930,29 +4004,29 @@ function setTextWithAutoFit(field, value, font, options = {}) {
 
   let chosenSize = maxFontSize;
   while (chosenSize > minFontSize && font.widthOfTextAtSize(text, chosenSize) > usableWidth) {
-    chosenSize -= 0.5;
+    chosenSize -= 0.25;
   }
 
   let finalText = text;
   if (font.widthOfTextAtSize(finalText, chosenSize) > usableWidth) {
-    if (!allowTruncate) {
-      return false;
-    }
-    const ellipsis = '…';
-    let trimmed = finalText;
-    while (trimmed.length > 0 && font.widthOfTextAtSize(`${trimmed}${ellipsis}`, minFontSize) > usableWidth) {
-      trimmed = trimmed.slice(0, -1);
-    }
-    finalText = trimmed ? `${trimmed}${ellipsis}` : '';
     chosenSize = minFontSize;
+    if (allowTruncate) {
+      const ellipsis = '…';
+      let trimmed = finalText;
+      while (trimmed.length > 0 && font.widthOfTextAtSize(`${trimmed}${ellipsis}`, minFontSize) > usableWidth) {
+        trimmed = trimmed.slice(0, -1);
+      }
+      finalText = trimmed ? `${trimmed}${ellipsis}` : '';
+    }
   }
 
+  const fits = font.widthOfTextAtSize(finalText, chosenSize) <= usableWidth;
   field.setFontSize(chosenSize);
   field.setText(finalText);
   if (typeof field.updateAppearances === 'function') {
     field.updateAppearances(font);
   }
-  return true;
+  return fits;
 }
 
 function buildPlaceAndDate(data) {
@@ -4089,7 +4163,10 @@ async function applyImportedPdfFieldValue(pdfField, field, rawValue, font) {
   }
 
   if (typeof pdfField.setText === 'function') {
-    setTextWithAutoFit(pdfField, textValue, font);
+    const normalized = field.type === 'date'
+      ? textValue
+      : normalizeTextCaseForField(textValue, { key: field.formName, fieldName: field.originalName });
+    setTextWithAutoFit(pdfField, normalized, font);
   }
 }
 
@@ -4535,7 +4612,7 @@ function formatImportedSummaryValue(field, rawValue) {
   if (field.type === 'date') {
     return formatDate(rawValue);
   }
-  return sanitizeText(rawValue);
+  return normalizeTextCaseForField(rawValue, { key: field.formName, fieldName: field.originalName });
 }
 
 function normalizeImportedCheckboxValue(value) {

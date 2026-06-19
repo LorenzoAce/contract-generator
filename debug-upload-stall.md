@@ -20,6 +20,7 @@ Status: OPEN
 - Evidenza 3: dopo la rimozione di `onUploadCompleted`, il warning sparisce; resta solo l'errore atteso `Invalid token parameter` dovuto al token fittizio usato nel test.
 - Evidenza 4: aggiunto un probe esplicito lato client verso `/api/blob-upload` prima dell'upload reale e uno stato di avanzamento percentuale per distinguere fra blocco nel token exchange e blocco nel trasferimento verso Blob.
 - Evidenza 5: il probe passa in produzione e l'interfaccia resta ferma su `Endpoint Blob verificato. Avvio upload diretto...`, quindi il blocco e' dopo il token exchange e prima dell'avanzamento trasferimento. Fix minimo applicato: disattivazione del ramo `multipart` lato client per usare upload diretto standard verso Blob.
+- Evidenza 6: anche senza multipart il trasferimento arriva a `99%` e si ferma durante la finalizzazione dell'operazione `upload()`. Nuovo fix basato sulle prove: migrazione al flusso `generateClientTokenFromReadWriteToken()` + `put()` client, che evita il percorso `upload()/handleUpload` sospetto nella fase finale.
 
 ## Hypothesis Status
 - H1: Respinta. Il body arriva nel formato atteso.
@@ -28,3 +29,4 @@ Status: OPEN
 - H4: Non supportata dalle prove raccolte finora.
 - H5: Confermata in parte. La fase critica era il callback automatico di completion, non il parsing iniziale della request.
 - H2: Rafforzata. Le prove puntano ora al ramo multipart del trasferimento client → Blob come causa piu probabile del blocco.
+- H2: Aggiornata. Il blocco non dipende solo dal multipart; le prove puntano alla fase finale del flusso `upload()` stesso. Il nuovo esperimento isola quella fase passando a `put()` con client token.

@@ -1,7 +1,8 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.21';
+const APP_VERSION = '1.22';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
+const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
 const CONTRACT_TEMPLATES = {
   'pvr-vincitu': {
     label: 'PVR Vincitu',
@@ -904,18 +905,14 @@ function buildBlobUploadClientPayload(draft) {
   });
 }
 
-async function probeBlobUploadRoute(draft) {
+async function fetchBlobClientToken(draft) {
   const pathname = buildImportedContractBlobPath(draft);
-  const response = await fetch('/api/blob-upload', {
+  const response = await fetch(BLOB_TOKEN_ROUTE_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      type: 'blob.generate-client-token',
-      payload: {
-        pathname,
-        multipart: false,
-        clientPayload: buildBlobUploadClientPayload(draft),
-      },
+      pathname,
+      clientPayload: buildBlobUploadClientPayload(draft),
     }),
   });
 
@@ -928,30 +925,34 @@ async function uploadImportedContractPdfViaBlob(draft) {
     throw new Error('File PDF originale non disponibile. Ricarica il contratto e riprova.');
   }
 
-  let upload;
+  let put;
   try {
-    ({ upload } = await import(BLOB_CLIENT_MODULE_URL));
+    ({ put } = await import(BLOB_CLIENT_MODULE_URL));
   } catch (error) {
     console.error(error);
     throw new Error('Impossibile inizializzare l upload diretto del PDF. Verifica la connessione e riprova.');
   }
 
   try {
-    setImportContractUploadPhase('Verifica endpoint upload Blob...');
-    const probe = await probeBlobUploadRoute(draft);
+    setImportContractUploadPhase('Richiesta token upload Blob...');
+    const probe = await fetchBlobClientToken(draft);
     // #region debug-point C:blob-client-probe
-    reportUploadDebug('C', 'client upload probe', {
+    reportUploadDebug('C', 'client token probe', {
       ok: probe.ok,
       status: probe.status,
       pathname: probe.pathname,
-      responseType: sanitizeText(probe.body?.type),
+      hasToken: Boolean(sanitizeText(probe.body?.clientToken)),
       error: sanitizeText(probe.body?.error),
     });
     // #endregion
     if (!probe.ok) {
-      throw new Error(`Endpoint upload Blob non pronto (${probe.status}): ${sanitizeText(probe.body?.error) || 'errore sconosciuto'}`);
+      throw new Error(`Endpoint token Blob non pronto (${probe.status}): ${sanitizeText(probe.body?.error) || 'errore sconosciuto'}`);
     }
-    setImportContractUploadPhase('Endpoint Blob verificato. Avvio upload diretto...');
+    const clientToken = sanitizeText(probe.body?.clientToken);
+    if (!clientToken) {
+      throw new Error('Token upload Blob non ricevuto dal server.');
+    }
+    setImportContractUploadPhase('Token Blob ricevuto. Avvio upload diretto...');
 
     // #region debug-point A:blob-client-start
     reportUploadDebug('A', 'client upload start', {
@@ -961,10 +962,9 @@ async function uploadImportedContractPdfViaBlob(draft) {
       pathname: buildImportedContractBlobPath(draft),
     });
     // #endregion
-    const blob = await upload(buildImportedContractBlobPath(draft), draft.sourceFile, {
+    const blob = await put(buildImportedContractBlobPath(draft), draft.sourceFile, {
       access: 'public',
-      handleUploadUrl: '/api/blob-upload',
-      clientPayload: buildBlobUploadClientPayload(draft),
+      token: clientToken,
       onUploadProgress: ({ loaded, total, percentage }) => {
         const resolvedTotal = Number(total) || Number(draft.sourceFile?.size) || 0;
         setImportContractUploadPhase(`Upload diretto in corso... ${Math.round(Number(percentage) || 0)}% (${loaded}/${resolvedTotal} byte)`);

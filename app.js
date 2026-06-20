@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.25';
+const APP_VERSION = '1.26';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -109,44 +109,50 @@ const SIGNATURE_LAYOUTS = {
     anchor: 'after-field',
     xOffset: 16,
     yOffset: -10,
-    maxWidth: 150,
-    extraWidth: 70,
-    height: 42,
+    maxWidth: 176,
+    extraWidth: 88,
+    maxHeight: 77,
+    height: 34,
   },
   2: {
     anchor: 'absolute',
     absoluteX: 376,
     yOffset: -10,
-    fixedWidth: 150,
-    height: 42,
+    fixedWidth: 176,
+    maxHeight: 77,
+    height: 34,
   },
   4: {
     anchor: 'absolute',
-    absoluteX: 376,
+    absoluteX: 388,
     yOffset: -4,
-    fixedWidth: 140,
+    fixedWidth: 176,
+    maxHeight: 77,
     height: 34,
   },
   5: {
     anchor: 'absolute',
-    absoluteX: 376,
+    absoluteX: 388,
     yOffset: -4,
-    fixedWidth: 140,
+    fixedWidth: 176,
+    maxHeight: 77,
     height: 34,
   },
   6: {
     anchor: 'absolute',
-    absoluteX: 364,
+    absoluteX: 376,
     yOffset: -4,
-    fixedWidth: 136,
-    height: 32,
+    fixedWidth: 176,
+    maxHeight: 77,
+    height: 34,
   },
   7: {
     anchor: 'absolute',
-    absoluteX: 364,
+    absoluteX: 376,
     yOffset: -4,
-    fixedWidth: 136,
-    height: 32,
+    fixedWidth: 176,
+    maxHeight: 77,
+    height: 34,
   },
 };
 
@@ -1886,7 +1892,8 @@ function readFileAsDataUrl(file) {
 }
 
 async function drawImageDataUrlOnSignatureCanvas(dataUrl) {
-  const image = await loadImageFromDataUrl(dataUrl);
+  const preparedDataUrl = await getPreparedSignatureDataUrl(dataUrl);
+  const image = await loadImageFromDataUrl(preparedDataUrl);
   const canvas = elements.signatureCanvas;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -4085,6 +4092,7 @@ async function drawSignatureOnSignatureLines(pdfDoc, form, anchorTextFieldName) 
   const signatureFieldName = sanitizeText(anchorTextFieldName) || 'luogo-e-data';
   const signatureField = form.getTextField(signatureFieldName);
   const trimmedSignatureDataUrl = await getTrimmedSignatureDataUrl(state.signatureDataUrl);
+  const signatureSourceImage = await loadImageFromDataUrl(trimmedSignatureDataUrl);
   const signatureBytes = await fetch(trimmedSignatureDataUrl).then((response) => response.arrayBuffer());
   const signatureImage = await pdfDoc.embedPng(signatureBytes);
   const pages = pdfDoc.getPages();
@@ -4100,16 +4108,18 @@ async function drawSignatureOnSignatureLines(pdfDoc, form, anchorTextFieldName) 
     const page = pages[pageIndex];
     const pageNumber = pageIndex + 1;
     const layout = SIGNATURE_LAYOUTS[pageNumber] || SIGNATURE_LAYOUTS.default;
-    const width = layout.fixedWidth || Math.min(layout.maxWidth, rect.width + layout.extraWidth);
-    const height = layout.height;
+    const maxWidth = layout.fixedWidth || Math.min(layout.maxWidth, rect.width + layout.extraWidth);
+    const maxHeight = layout.maxHeight || layout.height;
+    const { width, height } = fitImageWithinBox(signatureSourceImage.width, signatureSourceImage.height, maxWidth, maxHeight);
     const x = layout.anchor === 'absolute'
       ? layout.absoluteX
       : layout.anchor === 'field-left'
         ? rect.x + layout.xOffset
         : rect.x + rect.width + layout.xOffset;
+    const y = rect.y + layout.yOffset - Math.max(0, (height - layout.height) / 2);
     page.drawImage(signatureImage, {
       x,
-      y: rect.y + layout.yOffset,
+      y,
       width,
       height,
     });
@@ -4188,6 +4198,7 @@ async function drawSignatureOnNamedField(pdfDoc, form, fieldName) {
   }
 
   const trimmedSignatureDataUrl = await getTrimmedSignatureDataUrl(state.signatureDataUrl);
+  const signatureSourceImage = await loadImageFromDataUrl(trimmedSignatureDataUrl);
   const signatureBytes = await fetch(trimmedSignatureDataUrl).then((response) => response.arrayBuffer());
   const signatureImage = await pdfDoc.embedPng(signatureBytes);
   const pages = pdfDoc.getPages();
@@ -4201,17 +4212,39 @@ async function drawSignatureOnNamedField(pdfDoc, form, fieldName) {
 
     const page = pages[pageIndex];
     const padding = 4;
+    const availableWidth = Math.max(16, rect.width - padding * 2);
+    const availableHeight = Math.max(12, rect.height - padding * 2);
+    const { width, height } = fitImageWithinBox(
+      signatureSourceImage.width,
+      signatureSourceImage.height,
+      availableWidth,
+      availableHeight,
+    );
     page.drawImage(signatureImage, {
-      x: rect.x + padding,
-      y: rect.y + padding,
-      width: Math.max(16, rect.width - padding * 2),
-      height: Math.max(12, rect.height - padding * 2),
+      x: rect.x + padding + Math.max(0, (availableWidth - width) / 2),
+      y: rect.y + padding + Math.max(0, (availableHeight - height) / 2),
+      width,
+      height,
     });
   });
 }
 
+function fitImageWithinBox(sourceWidth, sourceHeight, maxWidth, maxHeight) {
+  const safeWidth = Math.max(1, Number(sourceWidth) || 1);
+  const safeHeight = Math.max(1, Number(sourceHeight) || 1);
+  const safeMaxWidth = Math.max(1, Number(maxWidth) || 1);
+  const safeMaxHeight = Math.max(1, Number(maxHeight) || 1);
+  const scale = Math.min(safeMaxWidth / safeWidth, safeMaxHeight / safeHeight);
+
+  return {
+    width: Math.max(1, safeWidth * scale),
+    height: Math.max(1, safeHeight * scale),
+  };
+}
+
 async function getTrimmedSignatureDataUrl(dataUrl) {
-  const image = await loadImageFromDataUrl(dataUrl);
+  const preparedDataUrl = await getPreparedSignatureDataUrl(dataUrl);
+  const image = await loadImageFromDataUrl(preparedDataUrl);
   const sourceCanvas = document.createElement('canvas');
   sourceCanvas.width = image.width;
   sourceCanvas.height = image.height;
@@ -4255,6 +4288,51 @@ async function getTrimmedSignatureDataUrl(dataUrl) {
   const croppedCtx = croppedCanvas.getContext('2d');
   croppedCtx.drawImage(sourceCanvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
   return croppedCanvas.toDataURL('image/png');
+}
+
+async function getPreparedSignatureDataUrl(dataUrl) {
+  const image = await loadImageFromDataUrl(dataUrl);
+  const sourceCanvas = document.createElement('canvas');
+  sourceCanvas.width = image.width;
+  sourceCanvas.height = image.height;
+  const sourceCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+  sourceCtx.drawImage(image, 0, 0);
+
+  removeLightBackgroundFromCanvas(sourceCtx, sourceCanvas.width, sourceCanvas.height);
+  return sourceCanvas.toDataURL('image/png');
+}
+
+function removeLightBackgroundFromCanvas(ctx, width, height) {
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const { data } = imageData;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const red = data[index];
+    const green = data[index + 1];
+    const blue = data[index + 2];
+    const alpha = data[index + 3];
+
+    if (alpha === 0) {
+      continue;
+    }
+
+    const maxChannel = Math.max(red, green, blue);
+    const minChannel = Math.min(red, green, blue);
+    const brightness = (red + green + blue) / 3;
+    const chroma = maxChannel - minChannel;
+
+    if (brightness >= 248 && chroma <= 18) {
+      data[index + 3] = 0;
+      continue;
+    }
+
+    if (brightness >= 238 && chroma <= 28) {
+      const fade = Math.max(0, Math.min(1, (248 - brightness) / 10));
+      data[index + 3] = Math.round(alpha * fade);
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
 }
 
 function loadImageFromDataUrl(dataUrl) {

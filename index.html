@@ -193,7 +193,9 @@
                           </div>
                           <div class="col-6 col-md-4">
                             <label for="legalCap" class="form-label required">CAP</label>
-                            <input type="text" class="form-control" id="legalCap" name="legalCap" data-required="true">
+                            <select class="form-select" id="legalCap" name="legalCap" data-required="true">
+                              <option value="">Seleziona CAP</option>
+                            </select>
                             <div class="invalid-feedback"></div>
                           </div>
                           <div class="col-9 col-md-8">
@@ -231,7 +233,9 @@
                           </div>
                           <div class="col-6 col-md-4">
                             <label for="operationalCap" class="form-label required">CAP</label>
-                            <input type="text" class="form-control" id="operationalCap" name="operationalCap" data-required="true">
+                            <select class="form-select" id="operationalCap" name="operationalCap" data-required="true">
+                              <option value="">Seleziona CAP</option>
+                            </select>
                             <div class="invalid-feedback"></div>
                           </div>
                           <div class="col-9 col-md-8">
@@ -339,7 +343,15 @@
                   <div class="row g-3" id="documentStepDefaultFields">
                     <div class="col-md-3">
                       <label for="documentType" class="form-label required">Tipo documento</label>
-                      <input type="text" class="form-control" id="documentType" name="documentType" data-required="true">
+                      <select class="form-select" id="documentType" name="documentType" data-required="true">
+                        <option value="">Seleziona documento</option>
+                        <option value="CARTA DI IDENTITA">Carta di identita</option>
+                        <option value="CARTA DI IDENTITA ELETTRONICA">Carta di identita elettronica</option>
+                        <option value="PASSAPORTO">Passaporto</option>
+                        <option value="PATENTE DI GUIDA">Patente di guida</option>
+                        <option value="PATENTE NAUTICA">Patente nautica</option>
+                        <option value="PERMESSO DI SOGGIORNO">Permesso di soggiorno</option>
+                      </select>
                       <div class="invalid-feedback"></div>
                     </div>
                     <div class="col-md-3">

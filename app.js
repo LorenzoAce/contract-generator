@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.28';
+const APP_VERSION = '1.29';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -1732,11 +1732,20 @@ function syncOperationalAddressFields() {
 
   const locked = checkbox.checked;
   operationalFields.forEach((field) => {
-    field.readOnly = locked;
+    if (field.matches('select')) {
+      field.style.pointerEvents = locked ? 'none' : '';
+      field.setAttribute('aria-readonly', locked ? 'true' : 'false');
+    } else {
+      field.readOnly = locked;
+    }
     field.classList.toggle('is-readonly', locked);
   });
 
   if (!locked) {
+    const operationalConfig = COMUNE_AUTOCOMPLETE_CONFIGS.find((config) => config.capField === 'operationalCap');
+    if (operationalConfig) {
+      refreshCapOptions(operationalConfig, { preserveCurrentValue: true });
+    }
     return;
   }
 
@@ -1757,6 +1766,11 @@ function syncOperationalAddressFields() {
       clearInvalid(operationalField);
     }
   });
+
+  const operationalConfig = COMUNE_AUTOCOMPLETE_CONFIGS.find((config) => config.capField === 'operationalCap');
+  if (operationalConfig) {
+    refreshCapOptions(operationalConfig, { preserveCurrentValue: true, autoSelectSingle: true });
+  }
 }
 
 function handleContractTypeChange({ suppressStatus = false } = {}) {
@@ -1880,18 +1894,18 @@ function setDefaultDates() {
 }
 
 function initializeStaticAutocomplete() {
-  ensureDatalistOptions(
-    DOCUMENT_TYPE_DATALIST_ID,
-    DOCUMENT_TYPE_OPTIONS.map((value) => ({ value }))
-  );
-
   const documentTypeField = document.getElementById('documentType');
-  if (documentTypeField) {
+  if (documentTypeField && documentTypeField.matches('input')) {
+    ensureDatalistOptions(
+      DOCUMENT_TYPE_DATALIST_ID,
+      DOCUMENT_TYPE_OPTIONS.map((value) => ({ value }))
+    );
     documentTypeField.setAttribute('list', DOCUMENT_TYPE_DATALIST_ID);
   }
 
   ensureDatalistOptions(COMUNI_DATALIST_ID, []);
   ensureDatalistOptions(PROVINCE_DATALIST_ID, []);
+  initializeCapSelects();
 
   COMUNE_AUTOCOMPLETE_CONFIGS.forEach((config) => bindComuneAutocomplete(config));
 }
@@ -1937,16 +1951,36 @@ function bindComuneAutocomplete(config) {
 
   cityField.setAttribute('list', COMUNI_DATALIST_ID);
   cityField.addEventListener('focus', () => updateComuneSuggestions(cityField.value));
-  cityField.addEventListener('input', () => updateComuneSuggestions(cityField.value));
-  cityField.addEventListener('change', () => applyComuneSelection(config));
-  cityField.addEventListener('blur', () => applyComuneSelection(config));
+  cityField.addEventListener('input', () => {
+    updateComuneSuggestions(cityField.value);
+    refreshCapOptions(config, { preserveCurrentValue: true });
+  });
+  cityField.addEventListener('change', () => {
+    applyComuneSelection(config);
+    refreshCapOptions(config, { preserveCurrentValue: true, autoSelectSingle: true });
+  });
+  cityField.addEventListener('blur', () => {
+    applyComuneSelection(config);
+    refreshCapOptions(config, { preserveCurrentValue: true, autoSelectSingle: true });
+  });
 
   const provinceField = config.provinceField ? document.getElementById(config.provinceField) : null;
   if (provinceField) {
     provinceField.setAttribute('list', PROVINCE_DATALIST_ID);
     provinceField.addEventListener('focus', () => updateProvinceSuggestions(provinceField.value));
-    provinceField.addEventListener('input', () => updateProvinceSuggestions(provinceField.value));
+    provinceField.addEventListener('input', () => {
+      updateProvinceSuggestions(provinceField.value);
+      refreshCapOptions(config, { preserveCurrentValue: true });
+    });
+    provinceField.addEventListener('change', () => refreshCapOptions(config, { preserveCurrentValue: true, autoSelectSingle: true }));
+    provinceField.addEventListener('blur', () => refreshCapOptions(config, { preserveCurrentValue: true, autoSelectSingle: true }));
   }
+}
+
+function initializeCapSelects() {
+  COMUNE_AUTOCOMPLETE_CONFIGS
+    .filter((config) => config.capField)
+    .forEach((config) => refreshCapOptions(config, { preserveCurrentValue: true }));
 }
 
 function ensureDatalistOptions(id, options) {
@@ -2093,6 +2127,43 @@ function updateProvinceSuggestions(query) {
   );
 }
 
+function refreshCapOptions(config, { preserveCurrentValue = true, autoSelectSingle = false } = {}) {
+  const capField = config.capField ? document.getElementById(config.capField) : null;
+  if (!capField || !capField.matches('select')) {
+    return;
+  }
+
+  const cityField = document.getElementById(config.cityField);
+  const provinceField = config.provinceField ? document.getElementById(config.provinceField) : null;
+  const currentValue = sanitizeText(capField.value);
+  const match = findExactComune(cityField?.value || '', provinceField?.value || '');
+  const availableCaps = Array.isArray(match?.capList)
+    ? Array.from(new Set(match.capList.filter(Boolean)))
+    : [];
+
+  let selectedValue = preserveCurrentValue ? currentValue : '';
+  if (!selectedValue && autoSelectSingle && availableCaps.length === 1) {
+    selectedValue = availableCaps[0];
+  }
+  if (selectedValue && !availableCaps.includes(selectedValue)) {
+    availableCaps.unshift(selectedValue);
+  }
+
+  let placeholder = 'Seleziona CAP';
+  if (!sanitizeText(cityField?.value)) {
+    placeholder = 'Seleziona prima il Comune';
+  } else if (!match) {
+    placeholder = 'Seleziona Comune e Provincia';
+  }
+
+  capField.innerHTML = [
+    `<option value="">${escapeHtml(placeholder)}</option>`,
+    ...availableCaps.map((cap) => `<option value="${escapeHtml(cap)}">${escapeHtml(cap)}</option>`),
+  ].join('');
+  capField.value = selectedValue;
+  capField.dataset.lockedValue = selectedValue;
+}
+
 function findComuneSuggestions(normalizedQuery) {
   const startsWith = [];
   const includes = [];
@@ -2134,7 +2205,7 @@ function applyComuneSelection(config) {
     updated = true;
   }
 
-  if (capField && !sanitizeText(capField.value) && match.capList.length === 1) {
+  if (capField && capField.matches('input') && !sanitizeText(capField.value) && match.capList.length === 1) {
     capField.value = match.capList[0];
     clearInvalid(capField);
     updated = true;
@@ -2150,7 +2221,10 @@ function applyComuneSelection(config) {
 }
 
 function syncAllComuneDependentFields() {
-  COMUNE_AUTOCOMPLETE_CONFIGS.forEach((config) => applyComuneSelection(config));
+  COMUNE_AUTOCOMPLETE_CONFIGS.forEach((config) => {
+    applyComuneSelection(config);
+    refreshCapOptions(config, { preserveCurrentValue: true, autoSelectSingle: true });
+  });
 }
 
 function findExactComune(cityValue, provinceValue = '') {
@@ -3332,6 +3406,7 @@ function scrollWizardTop() {
 function refreshUi() {
   syncPresentedByFields();
   syncOperationalAddressFields();
+  initializeCapSelects();
   syncDynamicContractUi();
   applyContractSpecificUi();
   updateWizardUi();

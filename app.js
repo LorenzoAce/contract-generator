@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.26';
+const APP_VERSION = '1.27';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -3878,8 +3878,9 @@ function normalizeTextCaseForField(value, { key, fieldName } = {}) {
   return text.toUpperCase();
 }
 
-function normalizeValueCase(value, { key, inputType } = {}) {
-  const text = sanitizeText(value);
+function normalizeValueCase(value, { key, inputType, trim = true } = {}) {
+  const rawText = String(value || '');
+  const text = trim ? sanitizeText(rawText) : rawText;
   if (!text) {
     return '';
   }
@@ -3903,7 +3904,11 @@ function normalizeInputCase(input) {
     return;
   }
 
-  const normalized = normalizeValueCase(input.value, { key: input.name || input.id, inputType: input.type });
+  const normalized = normalizeValueCase(input.value, {
+    key: input.name || input.id,
+    inputType: input.type,
+    trim: false,
+  });
   if (normalized === input.value) {
     return;
   }

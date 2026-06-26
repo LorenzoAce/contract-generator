@@ -200,7 +200,9 @@
                           </div>
                           <div class="col-9 col-md-8">
                             <label for="legalCity" class="form-label required">Comune</label>
-                            <input type="text" class="form-control" id="legalCity" name="legalCity" data-required="true">
+                            <select class="form-select" id="legalCity" name="legalCity" data-required="true">
+                              <option value="">Seleziona prima la provincia</option>
+                            </select>
                             <div class="invalid-feedback"></div>
                           </div>
                           <div class="col-3 col-md-4">
@@ -208,7 +210,9 @@
                               <span class="d-inline d-sm-none">PR</span>
                               <span class="d-none d-sm-inline">Provincia</span>
                             </label>
-                            <input type="text" class="form-control" id="legalProvince" name="legalProvince" data-required="true">
+                            <select class="form-select" id="legalProvince" name="legalProvince" data-required="true">
+                              <option value="">Seleziona provincia</option>
+                            </select>
                             <div class="invalid-feedback"></div>
                           </div>
                         </div>
@@ -240,7 +244,9 @@
                           </div>
                           <div class="col-9 col-md-8">
                             <label for="operationalCity" class="form-label required">Comune</label>
-                            <input type="text" class="form-control" id="operationalCity" name="operationalCity" data-required="true">
+                            <select class="form-select" id="operationalCity" name="operationalCity" data-required="true">
+                              <option value="">Seleziona prima la provincia</option>
+                            </select>
                             <div class="invalid-feedback"></div>
                           </div>
                           <div class="col-3 col-md-4">
@@ -248,7 +254,9 @@
                               <span class="d-inline d-sm-none">PR</span>
                               <span class="d-none d-sm-inline">Provincia</span>
                             </label>
-                            <input type="text" class="form-control" id="operationalProvince" name="operationalProvince" data-required="true">
+                            <select class="form-select" id="operationalProvince" name="operationalProvince" data-required="true">
+                              <option value="">Seleziona provincia</option>
+                            </select>
                             <div class="invalid-feedback"></div>
                           </div>
                         </div>
@@ -293,12 +301,16 @@
                     </div>
                     <div class="col-md-8">
                       <label for="birthCity" class="form-label required">Luogo di nascita</label>
-                      <input type="text" class="form-control" id="birthCity" name="birthCity" data-required="true">
+                      <select class="form-select" id="birthCity" name="birthCity" data-required="true">
+                        <option value="">Seleziona prima la provincia</option>
+                      </select>
                       <div class="invalid-feedback"></div>
                     </div>
                     <div class="col-md-4" id="birthProvinceGroup">
                       <label for="birthProvince" class="form-label required">Provincia di nascita</label>
-                      <input type="text" class="form-control" id="birthProvince" name="birthProvince" data-required="true">
+                      <select class="form-select" id="birthProvince" name="birthProvince" data-required="true">
+                        <option value="">Seleziona provincia</option>
+                      </select>
                       <div class="invalid-feedback"></div>
                     </div>
                   </div>
@@ -317,12 +329,16 @@
                     </div>
                     <div class="col-md-2">
                       <label for="residenceCity" class="form-label required">Comune</label>
-                      <input type="text" class="form-control" id="residenceCity" name="residenceCity" data-required="true">
+                      <select class="form-select" id="residenceCity" name="residenceCity" data-required="true">
+                        <option value="">Seleziona prima la provincia</option>
+                      </select>
                       <div class="invalid-feedback"></div>
                     </div>
                     <div class="col-md-2" id="residenceProvinceGroup">
                       <label for="residenceProvince" class="form-label required">Provincia</label>
-                      <input type="text" class="form-control" id="residenceProvince" name="residenceProvince" data-required="true">
+                      <select class="form-select" id="residenceProvince" name="residenceProvince" data-required="true">
+                        <option value="">Seleziona provincia</option>
+                      </select>
                       <div class="invalid-feedback"></div>
                     </div>
                   </div>

@@ -1,8 +1,33 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.27';
+const APP_VERSION = '1.28';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
+const COMUNI_DATASET_URL = 'https://raw.githubusercontent.com/matteocontrini/comuni-json/master/comuni.json';
+const COMUNI_CACHE_KEY = 'contract-generator-comuni-cache-v1';
+const COMUNI_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
+const COMUNI_DATALIST_ID = 'comuniAutocompleteOptions';
+const PROVINCE_DATALIST_ID = 'provinceAutocompleteOptions';
+const DOCUMENT_TYPE_DATALIST_ID = 'documentTypeOptions';
+const DOCUMENT_TYPE_OPTIONS = [
+  'CARTA DI IDENTITA',
+  'CARTA DI IDENTITA ELETTRONICA',
+  'PASSAPORTO',
+  'PATENTE DI GUIDA',
+  'PATENTE NAUTICA',
+  'PERMESSO DI SOGGIORNO',
+];
+const COMUNE_AUTOCOMPLETE_CONFIGS = [
+  { cityField: 'legalCity', provinceField: 'legalProvince', capField: 'legalCap' },
+  { cityField: 'operationalCity', provinceField: 'operationalProvince', capField: 'operationalCap' },
+  { cityField: 'birthCity', provinceField: 'birthProvince' },
+  { cityField: 'residenceCity', provinceField: 'residenceProvince' },
+];
+const autocompleteStore = {
+  comuni: [],
+  provinces: [],
+  loaded: false,
+};
 const CONTRACT_TEMPLATES = {
   'pvr-vincitu': {
     label: 'PVR Vincitu',
@@ -341,6 +366,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderAppVersion();
   await refreshContractTypeOptions({ preferredValue: 'pvr-vincitu', silentErrors: true });
   initializeCanvas();
+  initializeStaticAutocomplete();
   renderStepper();
   bindEvents();
   setDefaultDates();
@@ -349,6 +375,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadFromLocalStorage({ silent: true, notifyIfMissing: false });
   refreshUi();
   setupFooterOffsetSync();
+  void initializeComuneAutocomplete();
 });
 
 function renderAppVersion() {
@@ -1850,6 +1877,324 @@ function isCanvasBlank() {
 }
 
 function setDefaultDates() {
+}
+
+function initializeStaticAutocomplete() {
+  ensureDatalistOptions(
+    DOCUMENT_TYPE_DATALIST_ID,
+    DOCUMENT_TYPE_OPTIONS.map((value) => ({ value }))
+  );
+
+  const documentTypeField = document.getElementById('documentType');
+  if (documentTypeField) {
+    documentTypeField.setAttribute('list', DOCUMENT_TYPE_DATALIST_ID);
+  }
+
+  ensureDatalistOptions(COMUNI_DATALIST_ID, []);
+  ensureDatalistOptions(PROVINCE_DATALIST_ID, []);
+
+  COMUNE_AUTOCOMPLETE_CONFIGS.forEach((config) => bindComuneAutocomplete(config));
+}
+
+async function initializeComuneAutocomplete() {
+  const cached = readComuniCache();
+  if (cached.length) {
+    hydrateComuneAutocomplete(cached);
+    syncAllComuneDependentFields();
+    updateProvinceSuggestions('');
+  }
+
+  if (cached.length && Date.now() - readComuniCacheTimestamp() < COMUNI_CACHE_MAX_AGE_MS) {
+    return;
+  }
+
+  try {
+    const response = await fetch(COMUNI_DATASET_URL);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const normalized = normalizeComuniDataset(payload);
+    if (!normalized.length) {
+      return;
+    }
+
+    writeComuniCache(normalized);
+    hydrateComuneAutocomplete(normalized);
+    syncAllComuneDependentFields();
+    updateProvinceSuggestions('');
+  } catch (error) {
+    console.warn('Autocomplete Comuni non disponibile.', error);
+  }
+}
+
+function bindComuneAutocomplete(config) {
+  const cityField = document.getElementById(config.cityField);
+  if (!cityField) {
+    return;
+  }
+
+  cityField.setAttribute('list', COMUNI_DATALIST_ID);
+  cityField.addEventListener('focus', () => updateComuneSuggestions(cityField.value));
+  cityField.addEventListener('input', () => updateComuneSuggestions(cityField.value));
+  cityField.addEventListener('change', () => applyComuneSelection(config));
+  cityField.addEventListener('blur', () => applyComuneSelection(config));
+
+  const provinceField = config.provinceField ? document.getElementById(config.provinceField) : null;
+  if (provinceField) {
+    provinceField.setAttribute('list', PROVINCE_DATALIST_ID);
+    provinceField.addEventListener('focus', () => updateProvinceSuggestions(provinceField.value));
+    provinceField.addEventListener('input', () => updateProvinceSuggestions(provinceField.value));
+  }
+}
+
+function ensureDatalistOptions(id, options) {
+  let datalist = document.getElementById(id);
+  if (!datalist) {
+    datalist = document.createElement('datalist');
+    datalist.id = id;
+    document.body.appendChild(datalist);
+  }
+
+  datalist.innerHTML = options.map((option) => {
+    const value = escapeHtml(option.value || '');
+    const label = escapeHtml(option.label || '');
+    const text = escapeHtml(option.text || '');
+    return `<option value="${value}" label="${label}">${text}</option>`;
+  }).join('');
+
+  return datalist;
+}
+
+function readComuniCache() {
+  try {
+    const raw = localStorage.getItem(COMUNI_CACHE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.items) ? parsed.items : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function readComuniCacheTimestamp() {
+  try {
+    const raw = localStorage.getItem(COMUNI_CACHE_KEY);
+    if (!raw) {
+      return 0;
+    }
+
+    const parsed = JSON.parse(raw);
+    return Number(parsed?.updatedAt) || 0;
+  } catch (error) {
+    return 0;
+  }
+}
+
+function writeComuniCache(items) {
+  try {
+    localStorage.setItem(COMUNI_CACHE_KEY, JSON.stringify({
+      updatedAt: Date.now(),
+      items,
+    }));
+  } catch (error) {
+    console.warn('Cache Comuni non salvata.', error);
+  }
+}
+
+function normalizeComuniDataset(items) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.map((item) => {
+    const city = sanitizeText(item?.nome).toUpperCase();
+    const provinceSigla = sanitizeText(item?.sigla).toUpperCase();
+    const provinceName = sanitizeText(item?.provincia?.nome).toUpperCase();
+    const regionName = sanitizeText(item?.regione?.nome).toUpperCase();
+    const capList = Array.isArray(item?.cap)
+      ? item.cap.map((cap) => sanitizeText(cap)).filter(Boolean)
+      : [];
+
+    return {
+      city,
+      cityKey: normalizeLookupKey(city),
+      provinceSigla,
+      provinceSiglaKey: normalizeLookupKey(provinceSigla),
+      provinceName,
+      provinceNameKey: normalizeLookupKey(provinceName),
+      regionName,
+      capList,
+    };
+  }).filter((item) => item.city && item.provinceSigla);
+}
+
+function hydrateComuneAutocomplete(items) {
+  autocompleteStore.comuni = Array.isArray(items) ? items : [];
+  autocompleteStore.provinces = buildProvinceOptions(autocompleteStore.comuni);
+  autocompleteStore.loaded = autocompleteStore.comuni.length > 0;
+}
+
+function buildProvinceOptions(items) {
+  const seen = new Set();
+  return items.reduce((result, item) => {
+    const key = `${item.provinceSigla}|${item.provinceName}`;
+    if (!item.provinceSigla || seen.has(key)) {
+      return result;
+    }
+
+    seen.add(key);
+    result.push({
+      value: item.provinceSigla,
+      label: item.provinceName,
+    });
+    return result;
+  }, []).sort((a, b) => a.value.localeCompare(b.value, 'it'));
+}
+
+function updateComuneSuggestions(query) {
+  if (!autocompleteStore.loaded) {
+    return;
+  }
+
+  const normalizedQuery = normalizeLookupKey(query);
+  if (!normalizedQuery) {
+    ensureDatalistOptions(COMUNI_DATALIST_ID, []);
+    return;
+  }
+
+  const options = findComuneSuggestions(normalizedQuery).map((item) => ({
+    value: item.city,
+    label: `${item.provinceSigla} - ${item.provinceName}`,
+    text: item.regionName,
+  }));
+
+  ensureDatalistOptions(COMUNI_DATALIST_ID, options);
+}
+
+function updateProvinceSuggestions(query) {
+  const normalizedQuery = normalizeLookupKey(query);
+  const source = autocompleteStore.provinces || [];
+  const matches = !normalizedQuery
+    ? source.slice(0, 30)
+    : source.filter((item) => (
+      normalizeLookupKey(item.value).startsWith(normalizedQuery)
+      || normalizeLookupKey(item.label).startsWith(normalizedQuery)
+      || normalizeLookupKey(item.label).includes(normalizedQuery)
+    )).slice(0, 30);
+
+  ensureDatalistOptions(
+    PROVINCE_DATALIST_ID,
+    matches.map((item) => ({ value: item.value, label: item.label }))
+  );
+}
+
+function findComuneSuggestions(normalizedQuery) {
+  const startsWith = [];
+  const includes = [];
+
+  autocompleteStore.comuni.forEach((item) => {
+    if (item.cityKey.startsWith(normalizedQuery)) {
+      startsWith.push(item);
+      return;
+    }
+    if (item.cityKey.includes(normalizedQuery)) {
+      includes.push(item);
+    }
+  });
+
+  return startsWith.concat(includes).slice(0, 40);
+}
+
+function applyComuneSelection(config) {
+  if (!autocompleteStore.loaded) {
+    return;
+  }
+
+  const cityField = document.getElementById(config.cityField);
+  if (!cityField) {
+    return;
+  }
+
+  const provinceField = config.provinceField ? document.getElementById(config.provinceField) : null;
+  const capField = config.capField ? document.getElementById(config.capField) : null;
+  const match = findExactComune(cityField.value, provinceField?.value || '');
+  if (!match) {
+    return;
+  }
+
+  let updated = false;
+  if (provinceField && !provinceMatchesComune(provinceField.value, match)) {
+    provinceField.value = match.provinceSigla;
+    clearInvalid(provinceField);
+    updated = true;
+  }
+
+  if (capField && !sanitizeText(capField.value) && match.capList.length === 1) {
+    capField.value = match.capList[0];
+    clearInvalid(capField);
+    updated = true;
+  }
+
+  if (updated && isCompanyLegalField(config.cityField)) {
+    syncOperationalAddressFields();
+  }
+
+  if (updated) {
+    triggerAutosave();
+  }
+}
+
+function syncAllComuneDependentFields() {
+  COMUNE_AUTOCOMPLETE_CONFIGS.forEach((config) => applyComuneSelection(config));
+}
+
+function findExactComune(cityValue, provinceValue = '') {
+  const cityKey = normalizeLookupKey(cityValue);
+  if (!cityKey) {
+    return null;
+  }
+
+  let matches = autocompleteStore.comuni.filter((item) => item.cityKey === cityKey);
+  if (!matches.length) {
+    return null;
+  }
+
+  const provinceKey = normalizeLookupKey(provinceValue);
+  if (provinceKey) {
+    const filtered = matches.filter((item) => (
+      item.provinceSiglaKey === provinceKey
+      || item.provinceNameKey === provinceKey
+    ));
+    if (filtered.length === 1) {
+      return filtered[0];
+    }
+    if (filtered.length > 1) {
+      matches = filtered;
+    }
+  }
+
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function provinceMatchesComune(value, comune) {
+  const provinceKey = normalizeLookupKey(value);
+  if (!provinceKey) {
+    return false;
+  }
+
+  return provinceKey === comune.provinceSiglaKey || provinceKey === comune.provinceNameKey;
+}
+
+function normalizeLookupKey(value) {
+  return sanitizeText(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 }
 
 async function handleSignatureUpload() {

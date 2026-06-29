@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.34';
+const APP_VERSION = '1.35';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -2824,12 +2824,32 @@ function renderContractTypeOptions(selectedValue) {
   importedOptions.forEach((option) => knownValues.add(option.value));
 
   const options = [...staticOptions, ...importedOptions];
-  elements.contractType.innerHTML = options
-    .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
-    .join('');
+  const profileOptions = options.filter((option) => isProfileContractOption(option));
+  const standardOptions = options.filter((option) => !isProfileContractOption(option));
+  const optionGroups = [
+    renderContractTypeOptionGroup('Contratti', standardOptions),
+    renderContractTypeOptionGroup('Profili', profileOptions),
+  ].filter(Boolean);
+  elements.contractType.innerHTML = optionGroups.join('');
 
   const resolvedValue = knownValues.has(selectedValue) ? selectedValue : (staticOptions[0]?.value || 'pvr-vincitu');
   elements.contractType.value = resolvedValue;
+}
+
+function renderContractTypeOptionGroup(label, options) {
+  if (!Array.isArray(options) || !options.length) {
+    return '';
+  }
+  const renderedOptions = options
+    .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
+    .join('');
+  return `<optgroup label="${escapeHtml(label)}">${renderedOptions}</optgroup>`;
+}
+
+function isProfileContractOption(option) {
+  const value = sanitizeText(option?.value).toLowerCase();
+  const label = sanitizeText(option?.label).toLowerCase();
+  return value.startsWith('profilo-') || label.startsWith('profilo ');
 }
 
 function getBuiltInDynamicContractTemplate(contractType = elements.contractType?.value) {

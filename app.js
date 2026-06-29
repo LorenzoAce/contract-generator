@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.35';
+const APP_VERSION = '1.36';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -2827,8 +2827,8 @@ function renderContractTypeOptions(selectedValue) {
   const profileOptions = options.filter((option) => isProfileContractOption(option));
   const standardOptions = options.filter((option) => !isProfileContractOption(option));
   const optionGroups = [
-    renderContractTypeOptionGroup('Contratti', standardOptions),
-    renderContractTypeOptionGroup('Profili', profileOptions),
+    renderContractTypeOptionSection('Contratti', standardOptions),
+    renderContractTypeOptionSection('Profili', profileOptions),
   ].filter(Boolean);
   elements.contractType.innerHTML = optionGroups.join('');
 
@@ -2836,14 +2836,15 @@ function renderContractTypeOptions(selectedValue) {
   elements.contractType.value = resolvedValue;
 }
 
-function renderContractTypeOptionGroup(label, options) {
+function renderContractTypeOptionSection(label, options) {
   if (!Array.isArray(options) || !options.length) {
     return '';
   }
+  const heading = `<option value="" disabled>${escapeHtml(`--- ${label} ---`)}</option>`;
   const renderedOptions = options
     .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
     .join('');
-  return `<optgroup label="${escapeHtml(label)}">${renderedOptions}</optgroup>`;
+  return `${heading}${renderedOptions}`;
 }
 
 function isProfileContractOption(option) {

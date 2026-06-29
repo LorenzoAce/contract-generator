@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.37';
+const APP_VERSION = '1.38';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -43,6 +43,27 @@ const CONTRACT_TEMPLATES = {
     directory: 'templates/vincitu',
     templateCandidates: [
       'profilo-agente-vincitu-sull-utile-compilabile.pdf',
+    ],
+  },
+  'profilo-special-37-5': {
+    label: 'Profilo Special 37.5',
+    directory: 'templates/vincitu',
+    templateCandidates: [
+      'profilo-special-37.5-2026.pdf.pdf',
+    ],
+  },
+  'profilo-super-vincent-30-35': {
+    label: 'Profilo Super Vincent 30-35',
+    directory: 'templates/vincitu',
+    templateCandidates: [
+      'profilo-super-vincent-30-35-2026.pdf.pdf',
+    ],
+  },
+  'profilo-super-vincent': {
+    label: 'Profilo Super Vincent',
+    directory: 'templates/vincitu',
+    templateCandidates: [
+      'profilo-super-vincent-2026.pdf.pdf',
     ],
   },
   novapay: {
@@ -150,6 +171,27 @@ const BUILT_IN_DYNAMIC_CONTRACT_TEMPLATES = {
       ],
     },
   },
+  'profilo-special-37-5': createSignatureOnlyProfileTemplate({
+    id: 'built-in-profilo-special-37-5',
+    contractType: 'profilo-special-37-5',
+    contractName: 'Profilo Special 37.5',
+    templateName: 'profilo-special-37.5-2026.pdf.pdf',
+    signatureName: '__signature_profilo_special_37_5',
+  }),
+  'profilo-super-vincent-30-35': createSignatureOnlyProfileTemplate({
+    id: 'built-in-profilo-super-vincent-30-35',
+    contractType: 'profilo-super-vincent-30-35',
+    contractName: 'Profilo Super Vincent 30-35',
+    templateName: 'profilo-super-vincent-30-35-2026.pdf.pdf',
+    signatureName: '__signature_profilo_super_vincent_30_35',
+  }),
+  'profilo-super-vincent': createSignatureOnlyProfileTemplate({
+    id: 'built-in-profilo-super-vincent',
+    contractType: 'profilo-super-vincent',
+    contractName: 'Profilo Super Vincent',
+    templateName: 'profilo-super-vincent-2026.pdf.pdf',
+    signatureName: '__signature_profilo_super_vincent',
+  }),
 };
 
 const PROFILO_AGENTE_PERCENT_FIELD_NAMES = new Set([
@@ -166,7 +208,60 @@ const PROFILO_AGENTE_MATCHED_PERCENT_PDF_FIELDS = new Set([
 
 const PROFILO_AGENTE_MATCHED_PERCENT_FONT_SIZE = 9.25;
 
+const DEFAULT_SIGNATURE_ONLY_PROFILE_PLACEMENT = {
+  page: 1,
+  x: 360,
+  y: 70,
+  width: 170,
+  height: 34,
+};
+
 const NOVAPAY_COMPANY_TYPE_FIELDS = ['ditta-individuale', 'sas', 'snc', 'srl', 'spa'];
+
+function createSignatureOnlyProfileTemplate({
+  id,
+  contractType,
+  contractName,
+  templateName,
+  signatureName,
+}) {
+  return {
+    id,
+    contract_type: contractType,
+    contract_name: contractName,
+    template_name: templateName,
+    directory: 'templates/vincitu',
+    fields: [
+      {
+        originalName: signatureName,
+        customName: `${sanitizeForDomId(contractType)}Firma`,
+        type: 'signature',
+        description: 'Firma',
+        category: 'firma',
+        signaturePlacement: { ...DEFAULT_SIGNATURE_ONLY_PROFILE_PLACEMENT },
+      },
+    ],
+    metadata: {
+      templateStorage: {
+        assetPath: `templates/vincitu/${templateName}`,
+      },
+      activeSteps: [8, 9],
+      stepOverrides: {
+        8: {
+          title: 'Firma',
+          description: 'Acquisisci la firma grafica da posizionare nella prima pagina del profilo.',
+        },
+        9: {
+          title: 'Riepilogo Finale',
+          description: 'Controlla il profilo prima di generare il PDF.',
+        },
+      },
+      checklist: [
+        { label: 'Firma profilo', stepIndex: 8 },
+      ],
+    },
+  };
+}
 
 const NOVAPAY_STEP_OVERRIDES = {
   0: {
@@ -3724,9 +3819,19 @@ function isProfiloAgenteVincituSelected() {
   return sanitizeText(elements.contractType?.value) === 'profilo-agente-vincitu';
 }
 
+function isSignatureOnlyProfileSelected(contractType = elements.contractType?.value) {
+  const template = getSelectedImportedTemplateByType(contractType);
+  if (!template) {
+    return false;
+  }
+  const fields = getImportedContractFieldDefinitions(template).filter((field) => !field.hidden);
+  return fields.length > 0 && fields.every((field) => field.type === 'signature');
+}
+
 function applyContractSpecificUi() {
   const novapaySelected = isNovapaySelected();
   const profiloAgenteVincituSelected = isProfiloAgenteVincituSelected();
+  const signatureOnlyProfileSelected = isSignatureOnlyProfileSelected();
   const uiConfig = getSelectedContractUiConfig();
   toggleElement(document.getElementById('pecGroup'), !novapaySelected);
   toggleElement(document.getElementById('mobileGroup'), !novapaySelected);
@@ -3738,7 +3843,7 @@ function applyContractSpecificUi() {
   toggleElement(elements.residenceProvinceGroup, !novapaySelected);
   toggleElement(elements.documentStepDefaultFields, !novapaySelected);
   toggleElement(elements.presentedByPanel, !novapaySelected && !profiloAgenteVincituSelected);
-  toggleElement(elements.placeAndDateGroup, !profiloAgenteVincituSelected);
+  toggleElement(elements.placeAndDateGroup, !profiloAgenteVincituSelected && !signatureOnlyProfileSelected);
 
   if (elements.vatOrTaxCodeLabel) {
     elements.vatOrTaxCodeLabel.textContent = novapaySelected ? 'Partita IVA' : 'Partita IVA / Codice Fiscale';
@@ -5354,8 +5459,9 @@ function buildDynamicContractStepMarkup(stepIndex, importedTemplate) {
     .filter((field) => field.stepIndex === stepIndex);
   const title = sanitizeText(importedTemplate?.contract_name) || 'contratto importato';
   const isProfiloSignatureStep = isProfiloAgenteVincituSelected() && stepIndex === 8;
+  const isSignatureOnlyProfileStep = isSignatureOnlyProfileSelected(importedTemplate?.contract_type) && stepIndex === 8;
 
-  if (isProfiloSignatureStep) {
+  if (isProfiloSignatureStep || isSignatureOnlyProfileStep) {
     return '';
   }
 

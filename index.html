@@ -628,10 +628,10 @@
                     </div>
                     <div class="col-lg-4">
                       <div class="surface-panel h-100">
-                        <div class="section-heading">Dettagli firma</div>
-                        <label for="placeAndDate" class="form-label">Luogo e data firma</label>
-                        <input type="text" class="form-control mb-3" id="placeAndDate" name="placeAndDate" placeholder="Es. Milano, 13/06/2026">
-                        <div class="form-text mb-4">Se lasciato vuoto, il campo restera vuoto anche nel PDF generato.</div>
+                        <div id="placeAndDateGroup">
+                          <input type="text" class="form-control mb-3" id="placeAndDate" name="placeAndDate" placeholder="Es. Milano, 13/06/2026">
+                          <div class="form-text mb-4">Se lasciato vuoto, il campo restera vuoto anche nel PDF generato.</div>
+                        </div>
                         <input type="file" class="form-control d-none" id="signatureUpload" accept="image/*">
                         <div class="d-grid gap-2">
                           <button type="button" class="btn btn-outline-primary" id="btnCaricaFirma">Carica immagine firma</button>

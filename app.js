@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.33';
+const APP_VERSION = '1.34';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -38,6 +38,13 @@ const CONTRACT_TEMPLATES = {
       'contratto-template.pdf',
     ],
   },
+  'profilo-agente-vincitu': {
+    label: 'Profilo Agente Vincitu',
+    directory: 'templates/vincitu',
+    templateCandidates: [
+      'profilo-agente-vincitu-sull-utile-compilabile.pdf',
+    ],
+  },
   novapay: {
     label: 'PDP Novapay',
     directory: 'templates/novapay',
@@ -46,6 +53,118 @@ const CONTRACT_TEMPLATES = {
     ],
   },
 };
+
+const BUILT_IN_DYNAMIC_CONTRACT_TEMPLATES = {
+  'profilo-agente-vincitu': {
+    id: 'built-in-profilo-agente-vincitu',
+    contract_type: 'profilo-agente-vincitu',
+    contract_name: 'Profilo Agente Vincitu',
+    template_name: 'profilo-agente-vincitu-sull-utile-compilabile.pdf',
+    directory: 'templates/vincitu',
+    fields: [
+      {
+        originalName: 'nome',
+        customName: 'profiloAgenteNome',
+        type: 'text',
+        description: 'Nome',
+        category: 'rappresentante',
+        layoutClass: 'col-md-6',
+      },
+      {
+        originalName: 'cognome',
+        customName: 'profiloAgenteCognome',
+        type: 'text',
+        description: 'Cognome',
+        category: 'rappresentante',
+        layoutClass: 'col-md-6',
+      },
+      {
+        originalName: 'percentuale-lorda-mensile-scommesse',
+        customName: 'profiloAgentePercentualeLordaMensileScommesse',
+        type: 'text',
+        description: 'Percentuale lorda mensile Scommesse',
+        category: 'fiscale',
+        layoutClass: 'col-md-4',
+        hidden: true,
+        computedFrom: 'profiloAgentePercentualeNettaMensileScommesse',
+        computedOffset: 1,
+      },
+      {
+        originalName: 'percentuale-netto-mensile-scommesse',
+        customName: 'profiloAgentePercentualeNettaMensileScommesse',
+        type: 'text',
+        description: 'Percentuale netta mensile Scommesse',
+        category: 'fiscale',
+        layoutClass: 'col-md-6',
+      },
+      {
+        originalName: 'prcentale-netto-casino',
+        customName: 'profiloAgentePercentualeNettaCasino',
+        type: 'text',
+        description: 'Percentuale netta Casino',
+        category: 'fiscale',
+        layoutClass: 'col-md-6',
+      },
+      {
+        originalName: '__signature_profilo_agente_vincitu',
+        customName: 'profiloAgenteFirma',
+        type: 'signature',
+        description: 'Firma Business Promoter',
+        category: 'firma',
+        signaturePlacement: {
+          page: 2,
+          x: 58,
+          y: 76,
+          width: 170,
+          height: 34,
+        },
+      },
+    ],
+    metadata: {
+      templateStorage: {
+        assetPath: 'templates/vincitu/profilo-agente-vincitu-sull-utile-compilabile.pdf',
+      },
+      activeSteps: [1, 4, 8, 9],
+      stepOverrides: {
+        1: {
+          title: 'Business Promoter',
+          description: 'Compila nome e cognome del Business Promoter da riportare nel profilo agente Vincitu.',
+        },
+        4: {
+          title: 'Percentuali Utile',
+          description: 'Inserisci le percentuali lorde e nette previste per scommesse e casino.',
+        },
+        8: {
+          title: 'Firma Business Promoter',
+          description: 'Acquisisci la firma grafica che verra posizionata nella seconda pagina del profilo agente.',
+        },
+        9: {
+          title: 'Riepilogo Finale',
+          description: 'Controlla i dati del profilo agente Vincitu prima di generare il PDF.',
+        },
+      },
+      checklist: [
+        { label: 'Dati Business Promoter', stepIndex: 1 },
+        { label: 'Percentuali profilo', stepIndex: 4 },
+        { label: 'Firma Business Promoter', stepIndex: 8 },
+      ],
+    },
+  },
+};
+
+const PROFILO_AGENTE_PERCENT_FIELD_NAMES = new Set([
+  'profiloAgentePercentualeLordaMensileScommesse',
+  'profiloAgentePercentualeNettaMensileScommesse',
+  'profiloAgentePercentualeNettaCasino',
+]);
+
+const PROFILO_AGENTE_MATCHED_PERCENT_PDF_FIELDS = new Set([
+  'percentuale-lorda-mensile-scommesse',
+  'percentuale-netto-mensile-scommesse',
+  'prcentale-netto-casino',
+]);
+
+const PROFILO_AGENTE_MATCHED_PERCENT_FONT_SIZE = 9.25;
 
 const NOVAPAY_COMPANY_TYPE_FIELDS = ['ditta-individuale', 'sas', 'snc', 'srl', 'spa'];
 
@@ -341,6 +460,7 @@ const elements = {
   residenceProvinceGroup: document.getElementById('residenceProvinceGroup'),
   documentStepDefaultFields: document.getElementById('documentStepDefaultFields'),
   presentedByPanel: document.getElementById('presentedByPanel'),
+  placeAndDateGroup: document.getElementById('placeAndDateGroup'),
   importContractModal: document.getElementById('importContractModal'),
   importContractFile: document.getElementById('importContractFile'),
   importContractName: document.getElementById('importContractName'),
@@ -1611,9 +1731,40 @@ function renderStepper() {
   });
 }
 
-function getActiveStepIndices() {
+function getSelectedContractUiConfig() {
   if (isNovapaySelected()) {
-    return [...NOVAPAY_ACTIVE_STEPS];
+    return {
+      activeSteps: [...NOVAPAY_ACTIVE_STEPS],
+      stepOverrides: NOVAPAY_STEP_OVERRIDES,
+      checklist: null,
+    };
+  }
+
+  const importedTemplate = getSelectedImportedTemplate();
+  const metadata = importedTemplate?.metadata && typeof importedTemplate.metadata === 'object'
+    ? importedTemplate.metadata
+    : null;
+  const activeSteps = Array.isArray(metadata?.activeSteps)
+    ? metadata.activeSteps
+        .map((stepIndex) => Number(stepIndex))
+        .filter((stepIndex) => Number.isInteger(stepIndex) && stepIndex >= 0 && stepIndex < STEP_DEFINITIONS.length)
+    : null;
+  const stepOverrides = metadata?.stepOverrides && typeof metadata.stepOverrides === 'object'
+    ? metadata.stepOverrides
+    : null;
+  const checklist = Array.isArray(metadata?.checklist) ? metadata.checklist : null;
+
+  return {
+    activeSteps: activeSteps?.length ? Array.from(new Set(activeSteps)).sort((a, b) => a - b) : null,
+    stepOverrides,
+    checklist,
+  };
+}
+
+function getActiveStepIndices() {
+  const uiConfig = getSelectedContractUiConfig();
+  if (uiConfig.activeSteps?.length) {
+    return [...uiConfig.activeSteps];
   }
   return STEP_DEFINITIONS.map((_, index) => index);
 }
@@ -1623,8 +1774,10 @@ function getStepDefinition(stepIndex) {
   if (!base) {
     return STEP_DEFINITIONS[0];
   }
-  if (isNovapaySelected() && NOVAPAY_STEP_OVERRIDES[stepIndex]) {
-    return { ...base, ...NOVAPAY_STEP_OVERRIDES[stepIndex] };
+  const uiConfig = getSelectedContractUiConfig();
+  const override = uiConfig.stepOverrides?.[stepIndex];
+  if (override) {
+    return { ...base, ...override };
   }
   return base;
 }
@@ -1649,7 +1802,7 @@ function handleFormInteraction(event) {
   }
 
   if (target.matches('input, textarea, select')) {
-    normalizeInputCase(target);
+    normalizeInputCase(target, { finalize: event.type === 'change' });
     if (target.name === 'salesContact' || target.name === 'presentedBy') {
       syncPresentedByFields({ sourceName: target.name });
     }
@@ -2435,6 +2588,10 @@ function loadFromLocalStorage({ silent = false, notifyIfMissing = true } = {}) {
 
   try {
     const data = JSON.parse(raw);
+    const contractType = sanitizeText(data.contractType) || 'pvr-vincitu';
+    elements.contractType.value = contractType;
+    state.dynamicContractRenderKey = '';
+    syncDynamicContractUi({ force: true });
     populateForm(data);
     if (data.signatureDataUrl) {
       restoreSignature(data.signatureDataUrl);
@@ -2534,7 +2691,9 @@ function populateForm(data) {
       return;
     }
 
-    firstField.value = value ?? '';
+    firstField.value = isProfiloAgentePercentField(key)
+      ? normalizeProfiloAgentePercentValue(value ?? '', { finalize: true })
+      : (value ?? '');
   });
 }
 
@@ -2609,7 +2768,10 @@ function updateTemplateInfo() {
 
   if (contractConfig.importedTemplate) {
     const sourceName = sanitizeText(contractConfig.importedTemplate.template_name) || 'template importato';
-    elements.templateInfo.textContent = `Template automatico importato: ${sourceName} (${contractConfig.label}).`;
+    const assetPath = sanitizeText(contractConfig.importedTemplate?.metadata?.templateStorage?.assetPath);
+    elements.templateInfo.textContent = assetPath
+      ? `Template automatico: ${sourceName} (${contractConfig.label}).`
+      : `Template automatico importato: ${sourceName} (${contractConfig.label}).`;
     return;
   }
 
@@ -2668,6 +2830,14 @@ function renderContractTypeOptions(selectedValue) {
 
   const resolvedValue = knownValues.has(selectedValue) ? selectedValue : (staticOptions[0]?.value || 'pvr-vincitu');
   elements.contractType.value = resolvedValue;
+}
+
+function getBuiltInDynamicContractTemplate(contractType = elements.contractType?.value) {
+  const normalizedType = sanitizeText(contractType);
+  if (!normalizedType) {
+    return null;
+  }
+  return BUILT_IN_DYNAMIC_CONTRACT_TEMPLATES[normalizedType] || null;
 }
 
 async function refreshSavedTemplates({ silentErrors } = {}) {
@@ -3529,8 +3699,14 @@ function isNovapaySelected() {
   return sanitizeText(elements.contractType?.value) === 'novapay';
 }
 
+function isProfiloAgenteVincituSelected() {
+  return sanitizeText(elements.contractType?.value) === 'profilo-agente-vincitu';
+}
+
 function applyContractSpecificUi() {
   const novapaySelected = isNovapaySelected();
+  const profiloAgenteVincituSelected = isProfiloAgenteVincituSelected();
+  const uiConfig = getSelectedContractUiConfig();
   toggleElement(document.getElementById('pecGroup'), !novapaySelected);
   toggleElement(document.getElementById('mobileGroup'), !novapaySelected);
   toggleElement(elements.operationalAddressPanel, !novapaySelected);
@@ -3540,7 +3716,8 @@ function applyContractSpecificUi() {
   toggleElement(elements.residenceNumberGroup, !novapaySelected);
   toggleElement(elements.residenceProvinceGroup, !novapaySelected);
   toggleElement(elements.documentStepDefaultFields, !novapaySelected);
-  toggleElement(elements.presentedByPanel, !novapaySelected);
+  toggleElement(elements.presentedByPanel, !novapaySelected && !profiloAgenteVincituSelected);
+  toggleElement(elements.placeAndDateGroup, !profiloAgenteVincituSelected);
 
   if (elements.vatOrTaxCodeLabel) {
     elements.vatOrTaxCodeLabel.textContent = novapaySelected ? 'Partita IVA' : 'Partita IVA / Codice Fiscale';
@@ -3558,7 +3735,7 @@ function applyContractSpecificUi() {
       copyElement.dataset.defaultText = copyElement.textContent;
     }
 
-    const override = novapaySelected ? NOVAPAY_STEP_OVERRIDES[index] : null;
+    const override = uiConfig.stepOverrides?.[index] || null;
     if (titleElement) {
       titleElement.textContent = override?.title || titleElement.dataset.defaultText || titleElement.textContent;
     }
@@ -3621,14 +3798,17 @@ function updateReviewSummaries() {
 function renderImportedContractSummaries(data) {
   const importedFields = getImportedContractFieldDefinitions();
   const annexRows = importedFields
+    .filter((field) => !field.hidden)
     .filter((field) => field.stepIndex <= 4)
     .slice(0, 6)
     .map((field) => [field.label, formatImportedSummaryValue(field, data[field.formName])]);
   const antimafiaRows = importedFields
+    .filter((field) => !field.hidden)
     .filter((field) => field.stepIndex >= 5 && field.stepIndex <= 8)
     .slice(0, 6)
     .map((field) => [field.label, formatImportedSummaryValue(field, data[field.formName])]);
   const finalRows = importedFields
+    .filter((field) => !field.hidden)
     .slice(0, 12)
     .map((field) => [field.label, formatImportedSummaryValue(field, data[field.formName])]);
 
@@ -3675,14 +3855,21 @@ function renderSummaryGrid(container, rows) {
 
 function updateChecklist() {
   if (isImportedContractSelected()) {
-    const checks = [
-      ['Campi anagrafici contratto', validateCompanyStep({ silent: true })],
-      ['Dati soggetto / azienda', validateRepresentativeStep({ silent: true })],
-      ['Documenti e scadenze', validateDocumentStep({ silent: true })],
-      ['Campi operativi', validateActivityStep({ silent: true })],
-      ['Campi fiscali / opzioni', validateFiscalStep({ silent: true })],
-      ['Firma del contratto', validateSignatureStep({ silent: true })],
-    ];
+    const uiConfig = getSelectedContractUiConfig();
+    const customChecklist = Array.isArray(uiConfig.checklist) ? uiConfig.checklist : null;
+    const checks = customChecklist?.length
+      ? customChecklist.map((item) => [
+        sanitizeText(item?.label) || 'Controllo contratto',
+        validateStep(Number(item?.stepIndex), { silent: true }),
+      ])
+      : [
+        ['Campi anagrafici contratto', validateCompanyStep({ silent: true })],
+        ['Dati soggetto / azienda', validateRepresentativeStep({ silent: true })],
+        ['Documenti e scadenze', validateDocumentStep({ silent: true })],
+        ['Campi operativi', validateActivityStep({ silent: true })],
+        ['Campi fiscali / opzioni', validateFiscalStep({ silent: true })],
+        ['Firma del contratto', validateSignatureStep({ silent: true })],
+      ];
 
     elements.finalChecklist.innerHTML = checks.map(([label, ok]) => `
       <div class="checklist-item ${ok ? 'is-complete' : ''}">
@@ -4174,6 +4361,18 @@ async function loadImportedTemplateAsset(importedTemplate) {
   const templateHash = sanitizeText(importedTemplate?.template_hash);
   const blobUrl = sanitizeText(templateStorage.downloadUrl || templateStorage.url);
   const storageMode = sanitizeText(templateStorage.storageMode);
+  const assetPath = sanitizeText(templateStorage.assetPath);
+
+  if (assetPath) {
+    const response = await fetch(assetPath);
+    if (!response.ok) {
+      throw new Error('Impossibile leggere il template locale del contratto selezionato.');
+    }
+    return {
+      bytes: new Uint8Array(await response.arrayBuffer()),
+      templateName,
+    };
+  }
 
   if (storageMode === 'vercel-blob' && blobUrl) {
     const response = await fetch(blobUrl);
@@ -4204,12 +4403,16 @@ async function fillTemplate(templateBytes, data) {
   const { PDFDocument, StandardFonts } = window.PDFLib;
   const pdfDoc = await PDFDocument.load(templateBytes);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const form = pdfDoc.getForm();
   const fields = new Map(form.getFields().map((field) => [field.getName(), field]));
   const importedTemplate = getSelectedImportedTemplate();
 
   if (importedTemplate) {
-    await fillImportedContractTemplate(pdfDoc, form, fields, data, importedTemplate, font);
+    await fillImportedContractTemplate(pdfDoc, form, fields, data, importedTemplate, {
+      regular: font,
+      bold: boldFont,
+    });
     form.flatten();
     return pdfDoc.save();
   }
@@ -4370,11 +4573,14 @@ function normalizeTextCaseForField(value, { key, fieldName } = {}) {
   return text.toUpperCase();
 }
 
-function normalizeValueCase(value, { key, inputType, trim = true } = {}) {
+function normalizeValueCase(value, { key, inputType, trim = true, finalize } = {}) {
   const rawText = String(value || '');
   const text = trim ? sanitizeText(rawText) : rawText;
   if (!text) {
     return '';
+  }
+  if (isProfiloAgentePercentField(key)) {
+    return normalizeProfiloAgentePercentValue(text, { finalize: typeof finalize === 'boolean' ? finalize : trim });
   }
   if (sanitizeText(inputType).toLowerCase() === 'date') {
     return text;
@@ -4385,7 +4591,7 @@ function normalizeValueCase(value, { key, inputType, trim = true } = {}) {
   return text.toUpperCase();
 }
 
-function normalizeInputCase(input) {
+function normalizeInputCase(input, { finalize = false } = {}) {
   if (!input || input.disabled) {
     return;
   }
@@ -4400,6 +4606,7 @@ function normalizeInputCase(input) {
     key: input.name || input.id,
     inputType: input.type,
     trim: false,
+    finalize,
   });
   if (normalized === input.value) {
     return;
@@ -4411,6 +4618,56 @@ function normalizeInputCase(input) {
   if (selectionStart !== null && selectionEnd !== null && typeof input.setSelectionRange === 'function') {
     input.setSelectionRange(selectionStart, selectionEnd);
   }
+}
+
+function isProfiloAgentePercentField(fieldName) {
+  return PROFILO_AGENTE_PERCENT_FIELD_NAMES.has(sanitizeText(fieldName));
+}
+
+function normalizeProfiloAgentePercentValue(value, { finalize = false } = {}) {
+  const raw = String(value || '');
+  const compact = raw.replace(/\s+/g, '').replace(/%/g, '').replace(/\./g, ',');
+  const sanitized = compact.replace(/[^0-9,]/g, '');
+  if (!sanitized) {
+    return '';
+  }
+
+  const separatorIndex = sanitized.indexOf(',');
+  const integerPart = (separatorIndex >= 0 ? sanitized.slice(0, separatorIndex) : sanitized).replace(/^0+(?=\d)/, '') || '0';
+  const decimalRaw = separatorIndex >= 0 ? sanitized.slice(separatorIndex + 1).replace(/,/g, '') : '';
+
+  if (!finalize) {
+    if (separatorIndex < 0) {
+      return integerPart;
+    }
+    if (compact.endsWith(',') && !decimalRaw) {
+      return `${integerPart},`;
+    }
+    return `${integerPart},${decimalRaw.slice(0, 1)}`;
+  }
+
+  const numericValue = Number(`${integerPart}.${decimalRaw.slice(0, 1) || '0'}`);
+  if (!Number.isFinite(numericValue)) {
+    return '';
+  }
+  return formatProfiloAgentePercentNumber(numericValue);
+}
+
+function parseProfiloAgentePercentNumber(value) {
+  const normalized = normalizeProfiloAgentePercentValue(value, { finalize: true });
+  if (!normalized) {
+    return null;
+  }
+  const numericValue = Number(normalized.replace('%', '').replace(',', '.'));
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function formatProfiloAgentePercentNumber(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return '';
+  }
+  return `${numericValue.toFixed(1).replace('.', ',')}%`;
 }
 
 function formatDate(value) {
@@ -4498,12 +4755,28 @@ function setTextWithAutoFit(field, value, font, options = {}) {
   const minWidgetWidth = getMinWidgetWidth(field);
   const usableWidth = typeof minWidgetWidth === 'number' ? Math.max(0, minWidgetWidth - 6) : null;
 
-  if (!usableWidth || !font || typeof font.widthOfTextAtSize !== 'function' || typeof field.setFontSize !== 'function') {
+  const setPlainText = () => {
     field.setText(text);
     if (font && typeof field.updateAppearances === 'function') {
-      field.updateAppearances(font);
+      try {
+        field.updateAppearances(font);
+      } catch (_error) {
+        // Some imported PDF fields only support plain text fallback.
+      }
     }
     return true;
+  };
+
+  if (!usableWidth || !font || typeof font.widthOfTextAtSize !== 'function' || typeof field.setFontSize !== 'function') {
+    try {
+      field.setText(text);
+      if (font && typeof field.updateAppearances === 'function') {
+        field.updateAppearances(font);
+      }
+      return true;
+    } catch (_error) {
+      return setPlainText();
+    }
   }
 
   let chosenSize = maxFontSize;
@@ -4525,10 +4798,14 @@ function setTextWithAutoFit(field, value, font, options = {}) {
   }
 
   const fits = font.widthOfTextAtSize(finalText, chosenSize) <= usableWidth;
-  field.setFontSize(chosenSize);
-  field.setText(finalText);
-  if (typeof field.updateAppearances === 'function') {
-    field.updateAppearances(font);
+  try {
+    field.setFontSize(chosenSize);
+    field.setText(finalText);
+    if (typeof field.updateAppearances === 'function') {
+      field.updateAppearances(font);
+    }
+  } catch (_error) {
+    return setPlainText();
   }
   return fits;
 }
@@ -4623,7 +4900,7 @@ async function drawSignatureOnSignatureLines(pdfDoc, form, anchorTextFieldName) 
   });
 }
 
-async function fillImportedContractTemplate(pdfDoc, form, fields, data, importedTemplate, font) {
+async function fillImportedContractTemplate(pdfDoc, form, fields, data, importedTemplate, fonts) {
   const importedFields = getImportedContractFieldDefinitions(importedTemplate);
   for (const field of importedFields) {
     const pdfField = fields.get(field.originalName);
@@ -4631,19 +4908,25 @@ async function fillImportedContractTemplate(pdfDoc, form, fields, data, imported
       continue;
     }
 
-    const rawValue = data[field.formName];
-    await applyImportedPdfFieldValue(pdfField, field, rawValue, font);
+    const rawValue = resolveImportedContractFieldValue(field, data);
+    await applyImportedPdfFieldValue(pdfField, field, rawValue, fonts);
   }
 
   if (state.signatureDataUrl) {
     const signatureFields = importedFields.filter((field) => field.type === 'signature');
     for (const field of signatureFields) {
-      await drawSignatureOnNamedField(pdfDoc, form, field.originalName);
+      if (field.signaturePlacement) {
+        await drawSignatureAtPlacement(pdfDoc, field.signaturePlacement);
+      } else {
+        await drawSignatureOnNamedField(pdfDoc, form, field.originalName);
+      }
     }
   }
 }
 
-async function applyImportedPdfFieldValue(pdfField, field, rawValue, font) {
+async function applyImportedPdfFieldValue(pdfField, field, rawValue, fonts) {
+  const regularFont = fonts?.regular || fonts;
+  const boldFont = fonts?.bold || regularFont;
   if (field.type === 'checkbox' && typeof pdfField.check === 'function') {
     if (normalizeImportedCheckboxValue(rawValue)) {
       pdfField.check();
@@ -4673,7 +4956,15 @@ async function applyImportedPdfFieldValue(pdfField, field, rawValue, font) {
     const normalized = field.type === 'date'
       ? textValue
       : normalizeTextCaseForField(textValue, { key: field.formName, fieldName: field.originalName });
-    setTextWithAutoFit(pdfField, normalized, font);
+    const useMatchedPercentStyle = PROFILO_AGENTE_MATCHED_PERCENT_PDF_FIELDS.has(field.originalName);
+    const selectedFont = useMatchedPercentStyle ? boldFont : regularFont;
+    const autoFitOptions = useMatchedPercentStyle
+      ? {
+        minFontSize: PROFILO_AGENTE_MATCHED_PERCENT_FONT_SIZE,
+        maxFontSize: PROFILO_AGENTE_MATCHED_PERCENT_FONT_SIZE,
+      }
+      : undefined;
+    setTextWithAutoFit(pdfField, normalized, selectedFont, autoFitOptions);
   }
 }
 
@@ -4723,6 +5014,34 @@ async function drawSignatureOnNamedField(pdfDoc, form, fieldName) {
       width,
       height,
     });
+  });
+}
+
+async function drawSignatureAtPlacement(pdfDoc, placement) {
+  const pageIndex = Math.max(0, (Number(placement?.page) || 1) - 1);
+  const page = pdfDoc.getPages()[pageIndex];
+  if (!page) {
+    return;
+  }
+
+  const trimmedSignatureDataUrl = await getTrimmedSignatureDataUrl(state.signatureDataUrl);
+  const signatureSourceImage = await loadImageFromDataUrl(trimmedSignatureDataUrl);
+  const signatureBytes = await fetch(trimmedSignatureDataUrl).then((response) => response.arrayBuffer());
+  const signatureImage = await pdfDoc.embedPng(signatureBytes);
+  const maxWidth = Math.max(24, Number(placement?.width) || 170);
+  const maxHeight = Math.max(16, Number(placement?.height) || 34);
+  const { width, height } = fitImageWithinBox(
+    signatureSourceImage.width,
+    signatureSourceImage.height,
+    maxWidth,
+    maxHeight,
+  );
+
+  page.drawImage(signatureImage, {
+    x: Math.max(0, Number(placement?.x) || 0),
+    y: Math.max(0, Number(placement?.y) || 0),
+    width,
+    height,
   });
 }
 
@@ -4857,8 +5176,13 @@ function downloadGeneratedPdf() {
   const link = document.createElement('a');
   link.href = url;
   link.download = `${safeName || 'contratto'}-compilato.pdf`;
+  link.style.display = 'none';
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url);
+    link.remove();
+  }, 1000);
   setStatus('Download del PDF avviato.', 'success');
 }
 
@@ -4909,15 +5233,14 @@ function normalizeBoolean(value) {
 
 function getCurrentContractConfig() {
   const contractType = elements.contractType?.value || 'pvr-vincitu';
-  const importedTemplate = (state.importedContractTemplatesCache || [])
-    .find((row) => sanitizeText(row?.contract_type) === sanitizeText(contractType));
+  const importedTemplate = getSelectedImportedTemplate(contractType);
   if (importedTemplate) {
     const label = sanitizeText(importedTemplate.contract_name)
       || sanitizeText(importedTemplate.template_name)
       || contractType;
     return {
       label,
-      directory: 'storage importato',
+      directory: sanitizeText(importedTemplate.directory) || 'storage importato',
       templateCandidates: [sanitizeText(importedTemplate.template_name) || 'template-importato.pdf'],
       importedTemplate,
     };
@@ -5006,8 +5329,14 @@ function ensureDynamicContractSlots() {
 
 function buildDynamicContractStepMarkup(stepIndex, importedTemplate) {
   const fields = getImportedContractFieldDefinitions(importedTemplate)
+    .filter((field) => !field.hidden)
     .filter((field) => field.stepIndex === stepIndex);
   const title = sanitizeText(importedTemplate?.contract_name) || 'contratto importato';
+  const isProfiloSignatureStep = isProfiloAgenteVincituSelected() && stepIndex === 8;
+
+  if (isProfiloSignatureStep) {
+    return '';
+  }
 
   if (!fields.length) {
     return `
@@ -5030,9 +5359,13 @@ function buildDynamicContractStepMarkup(stepIndex, importedTemplate) {
 
 function buildDynamicContractFieldMarkup(field) {
   const fieldId = `importedField_${sanitizeForDomId(field.formName)}`;
+  const layoutClass = sanitizeText(field.layoutClass) || 'col-md-6';
+  const hideProfileFieldHelp = isProfiloAgenteVincituSelected();
+  const isPercentField = isProfiloAgentePercentField(field.formName);
+  const labelMarkup = getDynamicContractFieldLabelMarkup(field);
   const helpParts = [
-    sanitizeText(field.description),
-    sanitizeText(field.originalName) ? `Campo PDF: ${sanitizeText(field.originalName)}` : '',
+    hideProfileFieldHelp ? '' : sanitizeText(field.description),
+    hideProfileFieldHelp ? '' : (sanitizeText(field.originalName) ? `Campo PDF: ${sanitizeText(field.originalName)}` : ''),
   ].filter(Boolean);
   const helpText = helpParts.join(' | ');
 
@@ -5040,8 +5373,8 @@ function buildDynamicContractFieldMarkup(field) {
     return `
       <div class="col-12">
         <div class="border rounded-3 p-3 bg-light">
-          <div class="fw-semibold">${escapeHtml(field.label)}</div>
-          <div class="small text-secondary">${helpText ? escapeHtml(helpText) : 'Questo campo usa la firma acquisita nella fase Firma.'}</div>
+          <div class="fw-semibold">${labelMarkup}</div>
+          ${hideProfileFieldHelp ? '' : `<div class="small text-secondary">${helpText ? escapeHtml(helpText) : 'Questo campo usa la firma acquisita nella fase Firma.'}</div>`}
         </div>
       </div>
     `;
@@ -5062,13 +5395,27 @@ function buildDynamicContractFieldMarkup(field) {
 
   const inputType = field.type === 'date' ? 'date' : 'text';
   return `
-    <div class="col-md-6">
-      <label for="${escapeHtml(fieldId)}" class="form-label required">${escapeHtml(field.label)}</label>
-      <input type="${escapeHtml(inputType)}" class="form-control" id="${escapeHtml(fieldId)}" name="${escapeHtml(field.formName)}" data-imported-contract-input="true" data-required="true">
+    <div class="${escapeHtml(layoutClass)}">
+      <label for="${escapeHtml(fieldId)}" class="form-label required">${labelMarkup}</label>
+      <input type="${escapeHtml(inputType)}" class="form-control" id="${escapeHtml(fieldId)}" name="${escapeHtml(field.formName)}" data-imported-contract-input="true" data-required="true"${isPercentField ? ' inputmode="decimal" placeholder="Es. 10,0%"' : ''}>
       ${helpText ? `<div class="form-text">${escapeHtml(helpText)}</div>` : ''}
       <div class="invalid-feedback"></div>
     </div>
   `;
+}
+
+function getDynamicContractFieldLabelMarkup(field) {
+  const label = sanitizeText(field?.label) || 'Campo';
+  if (!isProfiloAgenteVincituSelected()) {
+    return escapeHtml(label);
+  }
+  if (field?.formName === 'profiloAgentePercentualeNettaMensileScommesse') {
+    return 'Percentuale netta mensile <strong>Scommesse</strong>';
+  }
+  if (field?.formName === 'profiloAgentePercentualeNettaCasino') {
+    return 'Percentuale netta <strong>Casino</strong>';
+  }
+  return escapeHtml(label);
 }
 
 function validateImportedContractStep(stepIndex, { silent = false } = {}) {
@@ -5097,14 +5444,23 @@ function validateImportedContractField(field, { silent = false } = {}) {
   });
 }
 
-function getSelectedImportedTemplate() {
-  const contractType = sanitizeText(elements.contractType?.value);
-  return (state.importedContractTemplatesCache || [])
-    .find((row) => sanitizeText(row?.contract_type) === contractType) || null;
+function getSelectedImportedTemplate(contractType = elements.contractType?.value) {
+  return getSelectedImportedTemplateByType(contractType);
 }
 
 function isImportedContractSelected() {
   return Boolean(getSelectedImportedTemplate());
+}
+
+function getSelectedImportedTemplateByType(contractType) {
+  const normalizedType = sanitizeText(contractType);
+  if (!normalizedType) {
+    return null;
+  }
+  return (state.importedContractTemplatesCache || [])
+    .find((row) => sanitizeText(row?.contract_type) === normalizedType)
+    || getBuiltInDynamicContractTemplate(normalizedType)
+    || null;
 }
 
 function getImportedContractFieldDefinitions(importedTemplate = getSelectedImportedTemplate()) {
@@ -5125,6 +5481,13 @@ function getImportedContractFieldDefinitions(importedTemplate = getSelectedImpor
         label,
         description: sanitizeText(field?.description),
         category: sanitizeText(field?.category),
+        layoutClass: sanitizeText(field?.layoutClass),
+        hidden: field?.hidden === true,
+        computedFrom: sanitizeText(field?.computedFrom),
+        computedOffset: Number(field?.computedOffset) || 0,
+        signaturePlacement: field?.signaturePlacement && typeof field.signaturePlacement === 'object'
+          ? { ...field.signaturePlacement }
+          : null,
         stepIndex: resolveImportedContractFieldStep({
           originalName,
           customName,
@@ -5135,6 +5498,17 @@ function getImportedContractFieldDefinitions(importedTemplate = getSelectedImpor
       };
     })
     .filter((field) => field.originalName && field.formName);
+}
+
+function resolveImportedContractFieldValue(field, data) {
+  if (!field?.computedFrom) {
+    return data?.[field.formName];
+  }
+  const baseValue = parseProfiloAgentePercentNumber(data?.[field.computedFrom]);
+  if (baseValue === null) {
+    return '';
+  }
+  return formatProfiloAgentePercentNumber(baseValue + (Number(field.computedOffset) || 0));
 }
 
 function resolveImportedContractFieldStep(field) {
@@ -5186,6 +5560,9 @@ function formatImportedSummaryValue(field, rawValue) {
   }
   if (field.type === 'date') {
     return formatDate(rawValue);
+  }
+  if (isProfiloAgentePercentField(field.formName)) {
+    return normalizeProfiloAgentePercentValue(rawValue, { finalize: true });
   }
   return normalizeTextCaseForField(rawValue, { key: field.formName, fieldName: field.originalName });
 }

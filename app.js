@@ -29,6 +29,13 @@ const autocompleteStore = {
   provinces: [],
   loaded: false,
 };
+const DEFAULT_PROFILE_SIGNATURE_PLACEMENT = {
+  page: 1,
+  x: 368,
+  y: 155.05,
+  width: 170,
+  height: 34,
+};
 const CONTRACT_TEMPLATES = {
   'pvr-vincitu': {
     label: 'PVR Vincitu',
@@ -45,22 +52,22 @@ const CONTRACT_TEMPLATES = {
       'profilo-agente-vincitu-sull-utile-compilabile.pdf',
     ],
   },
-  'profilo-special-37-5': {
-    label: 'Profilo Special 37.5',
+  'profilo-special-37-5-2026': {
+    label: 'Profilo Special 37.5 2026',
     directory: 'templates/vincitu',
     templateCandidates: [
       'profilo-special-37.5-2026.pdf.pdf',
     ],
   },
-  'profilo-super-vincent-30-35': {
-    label: 'Profilo Super Vincent 30-35',
+  'profilo-super-vincent-30-35-2026': {
+    label: 'Profilo Super Vincent 30/35 2026',
     directory: 'templates/vincitu',
     templateCandidates: [
       'profilo-super-vincent-30-35-2026.pdf.pdf',
     ],
   },
-  'profilo-super-vincent': {
-    label: 'Profilo Super Vincent',
+  'profilo-super-vincent-2026': {
+    label: 'Profilo Super Vincent 2026',
     directory: 'templates/vincitu',
     templateCandidates: [
       'profilo-super-vincent-2026.pdf.pdf',
@@ -171,28 +178,73 @@ const BUILT_IN_DYNAMIC_CONTRACT_TEMPLATES = {
       ],
     },
   },
-  'profilo-special-37-5': createSignatureOnlyProfileTemplate({
-    id: 'built-in-profilo-special-37-5',
-    contractType: 'profilo-special-37-5',
-    contractName: 'Profilo Special 37.5',
+  'profilo-special-37-5-2026': createSignatureOnlyProfileTemplate({
+    id: 'built-in-profilo-special-37-5-2026',
+    contractType: 'profilo-special-37-5-2026',
+    contractName: 'Profilo Special 37.5 2026',
     templateName: 'profilo-special-37.5-2026.pdf.pdf',
-    signatureName: '__signature_profilo_special_37_5',
+    signatureFormName: 'profiloSpecial3752026Firma',
   }),
-  'profilo-super-vincent-30-35': createSignatureOnlyProfileTemplate({
-    id: 'built-in-profilo-super-vincent-30-35',
-    contractType: 'profilo-super-vincent-30-35',
-    contractName: 'Profilo Super Vincent 30-35',
+  'profilo-super-vincent-30-35-2026': createSignatureOnlyProfileTemplate({
+    id: 'built-in-profilo-super-vincent-30-35-2026',
+    contractType: 'profilo-super-vincent-30-35-2026',
+    contractName: 'Profilo Super Vincent 30/35 2026',
     templateName: 'profilo-super-vincent-30-35-2026.pdf.pdf',
-    signatureName: '__signature_profilo_super_vincent_30_35',
+    signatureFormName: 'profiloSuperVincent30352026Firma',
   }),
-  'profilo-super-vincent': createSignatureOnlyProfileTemplate({
-    id: 'built-in-profilo-super-vincent',
-    contractType: 'profilo-super-vincent',
-    contractName: 'Profilo Super Vincent',
+  'profilo-super-vincent-2026': createSignatureOnlyProfileTemplate({
+    id: 'built-in-profilo-super-vincent-2026',
+    contractType: 'profilo-super-vincent-2026',
+    contractName: 'Profilo Super Vincent 2026',
     templateName: 'profilo-super-vincent-2026.pdf.pdf',
-    signatureName: '__signature_profilo_super_vincent',
+    signatureFormName: 'profiloSuperVincent2026Firma',
   }),
 };
+
+function createSignatureOnlyProfileTemplate({
+  id,
+  contractType,
+  contractName,
+  templateName,
+  signatureFormName,
+}) {
+  return {
+    id,
+    contract_type: contractType,
+    contract_name: contractName,
+    template_name: templateName,
+    directory: 'templates/vincitu',
+    fields: [
+      {
+        originalName: `__signature_${contractType.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`,
+        customName: signatureFormName,
+        type: 'signature',
+        description: 'Firma',
+        category: 'firma',
+        signaturePlacement: { ...DEFAULT_PROFILE_SIGNATURE_PLACEMENT },
+      },
+    ],
+    metadata: {
+      templateStorage: {
+        assetPath: `templates/vincitu/${templateName}`,
+      },
+      activeSteps: [8, 9],
+      stepOverrides: {
+        8: {
+          title: 'Firma',
+          description: `Acquisisci la firma grafica da inserire nel ${contractName}.`,
+        },
+        9: {
+          title: 'Riepilogo Finale',
+          description: `Controlla la firma del ${contractName} prima di generare il PDF.`,
+        },
+      },
+      checklist: [
+        { label: 'Firma', stepIndex: 8 },
+      ],
+    },
+  };
+}
 
 const PROFILO_AGENTE_PERCENT_FIELD_NAMES = new Set([
   'profiloAgentePercentualeLordaMensileScommesse',
@@ -208,60 +260,7 @@ const PROFILO_AGENTE_MATCHED_PERCENT_PDF_FIELDS = new Set([
 
 const PROFILO_AGENTE_MATCHED_PERCENT_FONT_SIZE = 9.25;
 
-const DEFAULT_SIGNATURE_ONLY_PROFILE_PLACEMENT = {
-  page: 1,
-  x: 360,
-  y: 70,
-  width: 170,
-  height: 34,
-};
-
 const NOVAPAY_COMPANY_TYPE_FIELDS = ['ditta-individuale', 'sas', 'snc', 'srl', 'spa'];
-
-function createSignatureOnlyProfileTemplate({
-  id,
-  contractType,
-  contractName,
-  templateName,
-  signatureName,
-}) {
-  return {
-    id,
-    contract_type: contractType,
-    contract_name: contractName,
-    template_name: templateName,
-    directory: 'templates/vincitu',
-    fields: [
-      {
-        originalName: signatureName,
-        customName: `${sanitizeForDomId(contractType)}Firma`,
-        type: 'signature',
-        description: 'Firma',
-        category: 'firma',
-        signaturePlacement: { ...DEFAULT_SIGNATURE_ONLY_PROFILE_PLACEMENT },
-      },
-    ],
-    metadata: {
-      templateStorage: {
-        assetPath: `templates/vincitu/${templateName}`,
-      },
-      activeSteps: [8, 9],
-      stepOverrides: {
-        8: {
-          title: 'Firma',
-          description: 'Acquisisci la firma grafica da posizionare nella prima pagina del profilo.',
-        },
-        9: {
-          title: 'Riepilogo Finale',
-          description: 'Controlla il profilo prima di generare il PDF.',
-        },
-      },
-      checklist: [
-        { label: 'Firma profilo', stepIndex: 8 },
-      ],
-    },
-  };
-}
 
 const NOVAPAY_STEP_OVERRIDES = {
   0: {
@@ -3815,23 +3814,18 @@ function isNovapaySelected() {
   return sanitizeText(elements.contractType?.value) === 'novapay';
 }
 
+function isProfileContractSelected(contractType = elements.contractType?.value) {
+  const normalizedType = sanitizeText(contractType).toLowerCase();
+  return normalizedType.startsWith('profilo-');
+}
+
 function isProfiloAgenteVincituSelected() {
   return sanitizeText(elements.contractType?.value) === 'profilo-agente-vincitu';
 }
 
-function isSignatureOnlyProfileSelected(contractType = elements.contractType?.value) {
-  const template = getSelectedImportedTemplateByType(contractType);
-  if (!template) {
-    return false;
-  }
-  const fields = getImportedContractFieldDefinitions(template).filter((field) => !field.hidden);
-  return fields.length > 0 && fields.every((field) => field.type === 'signature');
-}
-
 function applyContractSpecificUi() {
   const novapaySelected = isNovapaySelected();
-  const profiloAgenteVincituSelected = isProfiloAgenteVincituSelected();
-  const signatureOnlyProfileSelected = isSignatureOnlyProfileSelected();
+  const profileContractSelected = isProfileContractSelected();
   const uiConfig = getSelectedContractUiConfig();
   toggleElement(document.getElementById('pecGroup'), !novapaySelected);
   toggleElement(document.getElementById('mobileGroup'), !novapaySelected);
@@ -3842,8 +3836,8 @@ function applyContractSpecificUi() {
   toggleElement(elements.residenceNumberGroup, !novapaySelected);
   toggleElement(elements.residenceProvinceGroup, !novapaySelected);
   toggleElement(elements.documentStepDefaultFields, !novapaySelected);
-  toggleElement(elements.presentedByPanel, !novapaySelected && !profiloAgenteVincituSelected);
-  toggleElement(elements.placeAndDateGroup, !profiloAgenteVincituSelected && !signatureOnlyProfileSelected);
+  toggleElement(elements.presentedByPanel, !novapaySelected && !profileContractSelected);
+  toggleElement(elements.placeAndDateGroup, !profileContractSelected);
 
   if (elements.vatOrTaxCodeLabel) {
     elements.vatOrTaxCodeLabel.textContent = novapaySelected ? 'Partita IVA' : 'Partita IVA / Codice Fiscale';
@@ -5458,10 +5452,9 @@ function buildDynamicContractStepMarkup(stepIndex, importedTemplate) {
     .filter((field) => !field.hidden)
     .filter((field) => field.stepIndex === stepIndex);
   const title = sanitizeText(importedTemplate?.contract_name) || 'contratto importato';
-  const isProfiloSignatureStep = isProfiloAgenteVincituSelected() && stepIndex === 8;
-  const isSignatureOnlyProfileStep = isSignatureOnlyProfileSelected(importedTemplate?.contract_type) && stepIndex === 8;
+  const isSignatureOnlyStep = stepIndex === 8 && fields.length > 0 && fields.every((field) => field.type === 'signature');
 
-  if (isProfiloSignatureStep || isSignatureOnlyProfileStep) {
+  if (isSignatureOnlyStep) {
     return '';
   }
 

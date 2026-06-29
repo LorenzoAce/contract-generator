@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.36';
+const APP_VERSION = '1.37';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -2827,8 +2827,8 @@ function renderContractTypeOptions(selectedValue) {
   const profileOptions = options.filter((option) => isProfileContractOption(option));
   const standardOptions = options.filter((option) => !isProfileContractOption(option));
   const optionGroups = [
-    renderContractTypeOptionSection('Contratti', standardOptions),
-    renderContractTypeOptionSection('Profili', profileOptions),
+    renderContractTypeOptionSection('CONTRATTI', standardOptions),
+    renderContractTypeOptionSection('PROFILI', profileOptions),
   ].filter(Boolean);
   elements.contractType.innerHTML = optionGroups.join('');
 
@@ -2840,7 +2840,7 @@ function renderContractTypeOptionSection(label, options) {
   if (!Array.isArray(options) || !options.length) {
     return '';
   }
-  const heading = `<option value="" disabled>${escapeHtml(`--- ${label} ---`)}</option>`;
+  const heading = `<option value="" disabled>${escapeHtml(`--- ${label.toUpperCase()} ---`)}</option>`;
   const renderedOptions = options
     .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
     .join('');

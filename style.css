@@ -381,6 +381,11 @@ body.app-shell {
   color: #132238;
 }
 
+.contract-picker__select option[disabled] {
+  font-weight: 700;
+  color: #0f172a;
+}
+
 .header-menu__trigger {
   min-height: 2.35rem;
   border-radius: 14px;

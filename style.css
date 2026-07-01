@@ -354,6 +354,25 @@ body.app-shell {
   color: #fff;
 }
 
+.contract-picker__trigger {
+  justify-content: flex-start;
+  padding-inline: 0.85rem;
+  text-align: left;
+}
+
+.contract-picker__trigger-value {
+  display: inline-block;
+  font-weight: 650;
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contract-picker__list {
+  min-width: 18rem;
+}
+
 @media (min-width: 768px) {
   .hero-toolbar--compact {
     display: grid;

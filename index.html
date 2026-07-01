@@ -32,9 +32,20 @@
           </div>
         </div>
         <div class="hero-toolbar hero-toolbar--compact">
-          <div class="contract-picker">
+          <div class="contract-picker dropdown">
             <label for="contractType" class="contract-picker__label">Documenti</label>
-            <select class="form-select contract-picker__select" id="contractType" name="contractType">
+            <button class="btn btn-outline-light header-menu__trigger dropdown-toggle contract-picker__trigger" type="button" id="contractTypeTrigger" data-bs-toggle="dropdown" aria-expanded="false">
+              <span class="btn-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                  <path d="M7 4.75h7.2l2.8 2.8v11.7A2 2 0 0 1 15 21.25H7A2 2 0 0 1 5 19.25V6.75A2 2 0 0 1 7 4.75Z"></path>
+                  <path d="M14.2 4.75v3.05h3.05"></path>
+                  <path d="M8.5 11h5.5M8.5 14.5h5.5"></path>
+                </svg>
+              </span>
+              <span class="contract-picker__trigger-value" id="contractTypeTriggerValue">PVR Vincitu</span>
+            </button>
+            <div class="dropdown-menu header-menu__list contract-picker__list" id="contractTypeMenu" aria-labelledby="contractTypeTrigger"></div>
+            <select class="form-select contract-picker__select d-none" id="contractType" name="contractType">
               <option value="pvr-vincitu" selected>PVR Vincitu</option>
             </select>
           </div>

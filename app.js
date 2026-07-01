@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.39';
+const APP_VERSION = '1.40';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -478,6 +478,8 @@ const elements = {
   appVersion: document.getElementById('appVersion'),
   form: document.getElementById('contractForm'),
   contractType: document.getElementById('contractType'),
+  contractTypeMenu: document.getElementById('contractTypeMenu'),
+  contractTypeTriggerValue: document.getElementById('contractTypeTriggerValue'),
   statusBox: document.getElementById('statusBox'),
   templateFile: document.getElementById('templateFile'),
   templateInfo: document.getElementById('templateInfo'),
@@ -619,6 +621,22 @@ function bindEvents() {
   elements.btnPulisciFirma.addEventListener('click', clearSignatureCanvas);
   elements.btnInserisciFirma.addEventListener('click', captureSignature);
   elements.contractType.addEventListener('change', handleContractTypeChange);
+  elements.contractTypeMenu?.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-contract-type]');
+    if (!trigger) {
+      return;
+    }
+    const value = sanitizeText(trigger.dataset.contractType);
+    if (!value || !elements.contractType) {
+      return;
+    }
+    if (elements.contractType.value === value) {
+      syncContractTypeDropdownSelection();
+      return;
+    }
+    elements.contractType.value = value;
+    elements.contractType.dispatchEvent(new Event('change', { bubbles: true }));
+  });
   elements.btnContractSaveNew.addEventListener('click', saveNewContractToCloud);
   elements.btnContractSaveUpdate.addEventListener('click', updateCurrentContractInCloud);
   elements.btnContractRefresh.addEventListener('click', refreshContractList);
@@ -2012,6 +2030,7 @@ function syncOperationalAddressFields() {
 }
 
 function handleContractTypeChange({ suppressStatus = false } = {}) {
+  syncContractTypeDropdownSelection();
   state.selectedTemplateFile = null;
   state.selectedTemplateName = '';
   state.selectedTemplateSource = 'auto';
@@ -2876,6 +2895,8 @@ function renderContractTypeOptions(selectedValue) {
 
   const resolvedValue = knownValues.has(selectedValue) ? selectedValue : (staticOptions[0]?.value || 'pvr-vincitu');
   elements.contractType.value = resolvedValue;
+  renderContractTypeDropdownMenu(resolvedValue, standardOptions, profileOptions);
+  syncContractTypeDropdownSelection();
 }
 
 function renderContractTypeOptionSection(label, options) {
@@ -2887,6 +2908,69 @@ function renderContractTypeOptionSection(label, options) {
     .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
     .join('');
   return `${heading}${renderedOptions}`;
+}
+
+function renderContractTypeDropdownMenu(selectedValue, standardOptions, profileOptions) {
+  if (!elements.contractTypeMenu) {
+    return;
+  }
+
+  const sections = [];
+  if (Array.isArray(standardOptions) && standardOptions.length) {
+    sections.push(renderContractTypeDropdownSection('Contratti', standardOptions, selectedValue));
+  }
+  if (Array.isArray(profileOptions) && profileOptions.length) {
+    if (sections.length) {
+      sections.push('<div class="dropdown-divider"></div>');
+    }
+    sections.push(renderContractTypeDropdownSection('Profili', profileOptions, selectedValue));
+  }
+
+  elements.contractTypeMenu.innerHTML = sections.join('');
+}
+
+function renderContractTypeDropdownSection(sectionLabel, options, selectedValue) {
+  const header = `<h6 class="dropdown-header">${escapeHtml(sectionLabel)}</h6>`;
+  const items = options.map((option) => {
+    const value = sanitizeText(option?.value);
+    const label = sanitizeText(option?.label) || value;
+    if (!value) {
+      return '';
+    }
+    const isActive = value === selectedValue;
+    const activeClass = isActive ? ' active' : '';
+    const currentAttr = isActive ? ' aria-current="true"' : '';
+    return `<button type="button" class="dropdown-item${activeClass}" data-contract-type="${escapeHtml(value)}"${currentAttr}>${escapeHtml(label)}</button>`;
+  }).join('');
+  return `${header}${items}`;
+}
+
+function syncContractTypeDropdownSelection() {
+  if (!elements.contractType || !elements.contractTypeMenu) {
+    syncContractTypeDropdownValue();
+    return;
+  }
+  const selectedValue = sanitizeText(elements.contractType.value);
+  elements.contractTypeMenu.querySelectorAll('[data-contract-type]').forEach((node) => {
+    const nodeValue = sanitizeText(node.dataset.contractType);
+    const isActive = nodeValue === selectedValue;
+    node.classList.toggle('active', isActive);
+    if (isActive) {
+      node.setAttribute('aria-current', 'true');
+    } else {
+      node.removeAttribute('aria-current');
+    }
+  });
+  syncContractTypeDropdownValue();
+}
+
+function syncContractTypeDropdownValue() {
+  if (!elements.contractType || !elements.contractTypeTriggerValue) {
+    return;
+  }
+  const selected = elements.contractType.selectedOptions ? elements.contractType.selectedOptions[0] : null;
+  const label = selected && !selected.disabled ? selected.textContent : '';
+  elements.contractTypeTriggerValue.textContent = sanitizeText(label) || 'Seleziona documento';
 }
 
 function isProfileContractOption(option) {

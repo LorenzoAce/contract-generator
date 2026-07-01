@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.38';
+const APP_VERSION = '1.39';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -1334,24 +1334,6 @@ function buildImportedContractBlobPath(draft) {
   return `imported-contracts/${contractType || 'generic'}/${templateHash || generateId()}.pdf`;
 }
 
-// #region debug-point A:blob-client-report
-function reportUploadDebug(hypothesisId, msg, data) {
-  fetch('http://127.0.0.1:7777/event', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId: 'upload-stall',
-      runId: 'pre-fix',
-      hypothesisId,
-      location: 'app.js:blob-upload',
-      msg: `[DEBUG] ${msg}`,
-      data,
-      ts: Date.now(),
-    }),
-  }).catch(() => {});
-}
-// #endregion
-
 function setImportContractUploadPhase(message) {
   if (elements.importContractStatus) {
     elements.importContractStatus.textContent = message;
@@ -1397,15 +1379,6 @@ async function uploadImportedContractPdfViaBlob(draft) {
   try {
     setImportContractUploadPhase('Richiesta token upload Blob...');
     const probe = await fetchBlobClientToken(draft);
-    // #region debug-point C:blob-client-probe
-    reportUploadDebug('C', 'client token probe', {
-      ok: probe.ok,
-      status: probe.status,
-      pathname: probe.pathname,
-      hasToken: Boolean(sanitizeText(probe.body?.clientToken)),
-      error: sanitizeText(probe.body?.error),
-    });
-    // #endregion
     if (!probe.ok) {
       throw new Error(`Endpoint token Blob non pronto (${probe.status}): ${sanitizeText(probe.body?.error) || 'errore sconosciuto'}`);
     }
@@ -1414,15 +1387,6 @@ async function uploadImportedContractPdfViaBlob(draft) {
       throw new Error('Token upload Blob non ricevuto dal server.');
     }
     setImportContractUploadPhase('Token Blob ricevuto. Avvio upload diretto...');
-
-    // #region debug-point A:blob-client-start
-    reportUploadDebug('A', 'client upload start', {
-      fileName: draft.fileName,
-      fileSize: Number(draft.sourceFile?.size) || 0,
-      contentType: draft.contentType || '',
-      pathname: buildImportedContractBlobPath(draft),
-    });
-    // #endregion
     const blob = await put(buildImportedContractBlobPath(draft), draft.sourceFile, {
       access: 'public',
       token: clientToken,
@@ -1431,15 +1395,6 @@ async function uploadImportedContractPdfViaBlob(draft) {
         setImportContractUploadPhase(`Upload diretto in corso... ${Math.round(Number(percentage) || 0)}% (${loaded}/${resolvedTotal} byte)`);
       },
     });
-
-    // #region debug-point B:blob-client-success
-    reportUploadDebug('B', 'client upload success', {
-      url: blob.url || '',
-      pathname: blob.pathname || '',
-      size: Number(blob.size) || 0,
-      contentType: blob.contentType || '',
-    });
-    // #endregion
 
     return {
       storageMode: 'vercel-blob',
@@ -1452,13 +1407,6 @@ async function uploadImportedContractPdfViaBlob(draft) {
     };
   } catch (error) {
     const message = sanitizeText(error?.message);
-    // #region debug-point D:blob-client-error
-    reportUploadDebug('D', 'client upload error', {
-      message,
-      name: sanitizeText(error?.name),
-      stackTop: sanitizeText(String(error?.stack || '').split('\n')[0] || ''),
-    });
-    // #endregion
     if (message.includes('BLOB_READ_WRITE_TOKEN') || message.includes('BLOB_STORE_ID') || message.includes('Blob')) {
       throw new Error('Vercel Blob non e configurato correttamente. Verifica BLOB_READ_WRITE_TOKEN e, se presente nel progetto, anche BLOB_STORE_ID.');
     }

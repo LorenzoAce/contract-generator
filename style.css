@@ -1146,18 +1146,30 @@ body.app-shell {
 }
 
 .signature-pad-modal__content {
+  display: flex;
+  flex-direction: column;
   min-height: min(90vh, 900px);
 }
 
+.signature-pad-modal__header {
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0.6rem 0.75rem 0 !important;
+  min-height: 0;
+}
+
 .signature-pad-modal__body {
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  padding-top: 0.5rem !important;
 }
 
 .signature-pad-modal__canvas-wrap {
   flex: 1;
-  min-height: 42vh;
+  min-height: 48vh;
   padding: 0.35rem;
   border-radius: 28px;
   background: linear-gradient(180deg, rgba(13, 110, 253, 0.04), rgba(111, 66, 193, 0.03));
@@ -1271,16 +1283,21 @@ textarea.form-control {
     border-radius: 0;
   }
 
+  .signature-pad-modal__header {
+    padding: 0.45rem 0.55rem 0 !important;
+  }
+
   .signature-pad-modal__body {
     flex: 1;
     min-height: 0;
-    padding-bottom: 0.5rem;
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.35rem;
   }
 
   .signature-pad-modal__canvas-wrap {
     min-height: 0;
     height: 100%;
-    padding: 0.2rem;
+    padding: 0.15rem;
   }
 
   .signature-canvas--expanded {
@@ -1312,6 +1329,10 @@ textarea.form-control {
   .signature-pad-modal__content {
     min-height: 100dvh;
     border-radius: 0;
+  }
+
+  .signature-pad-modal__header {
+    padding: 0.35rem 0.55rem 0 !important;
   }
 
   .signature-pad-modal__canvas-wrap {

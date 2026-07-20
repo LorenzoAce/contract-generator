@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.41';
+const APP_VERSION = '1.42';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -3863,10 +3863,10 @@ function applyContractSpecificUi() {
   toggleElement(document.getElementById('mobileGroup'), !novapaySelected);
   toggleElement(elements.operationalAddressPanel, !novapaySelected);
   toggleElement(elements.novapayCompanyTypePanel, novapaySelected);
-  toggleElement(elements.birthProvinceGroup, !novapaySelected);
+  toggleElement(elements.birthProvinceGroup, true);
   toggleElement(elements.residenceStreetGroup, !novapaySelected);
   toggleElement(elements.residenceNumberGroup, !novapaySelected);
-  toggleElement(elements.residenceProvinceGroup, !novapaySelected);
+  toggleElement(elements.residenceProvinceGroup, true);
   toggleElement(elements.documentStepDefaultFields, !novapaySelected);
   toggleElement(elements.presentedByPanel, !novapaySelected && !profileContractSelected);
   toggleElement(elements.placeAndDateGroup, !profileContractSelected);

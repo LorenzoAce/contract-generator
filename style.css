@@ -1152,6 +1152,7 @@ body.app-shell {
 .signature-pad-modal__body {
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .signature-pad-modal__canvas-wrap {
@@ -1160,6 +1161,14 @@ body.app-shell {
   padding: 0.35rem;
   border-radius: 28px;
   background: linear-gradient(180deg, rgba(13, 110, 253, 0.04), rgba(111, 66, 193, 0.03));
+}
+
+.signature-pad-modal__footer {
+  flex-shrink: 0;
+}
+
+.signature-pad-modal__action {
+  min-width: 0;
 }
 
 textarea.form-control {
@@ -1263,16 +1272,39 @@ textarea.form-control {
   }
 
   .signature-pad-modal__body {
-    padding-bottom: 0.75rem;
+    flex: 1;
+    min-height: 0;
+    padding-bottom: 0.5rem;
   }
 
   .signature-pad-modal__canvas-wrap {
-    min-height: 54dvh;
+    min-height: 0;
+    height: 100%;
     padding: 0.2rem;
   }
 
   .signature-canvas--expanded {
-    min-height: 54dvh;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .signature-pad-modal__footer {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 0.45rem !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: calc(0.45rem + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(8px);
+  }
+
+  .signature-pad-modal__action {
+    width: 100% !important;
+    padding: 0.6rem 0.5rem;
+    font-size: 0.9rem;
+    line-height: 1.15;
+    white-space: normal;
   }
 }
 
@@ -1283,11 +1315,23 @@ textarea.form-control {
   }
 
   .signature-pad-modal__canvas-wrap {
-    min-height: 64dvh;
+    min-height: 0;
+    height: 100%;
   }
 
   .signature-canvas--expanded {
-    min-height: 64dvh;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .signature-pad-modal__footer {
+    display: flex !important;
+    flex-direction: row !important;
+  }
+
+  .signature-pad-modal__action {
+    width: auto !important;
+    flex: 1 1 0;
   }
 
 

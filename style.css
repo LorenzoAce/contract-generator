@@ -1133,6 +1133,35 @@ body.app-shell {
   touch-action: none;
 }
 
+.signature-canvas--expanded {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  border-radius: 24px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.signature-pad-modal__dialog {
+  max-width: min(1200px, calc(100vw - 2rem));
+}
+
+.signature-pad-modal__content {
+  min-height: min(90vh, 900px);
+}
+
+.signature-pad-modal__body {
+  display: flex;
+  flex-direction: column;
+}
+
+.signature-pad-modal__canvas-wrap {
+  flex: 1;
+  min-height: 42vh;
+  padding: 0.35rem;
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(13, 110, 253, 0.04), rgba(111, 66, 193, 0.03));
+}
+
 textarea.form-control {
   min-height: auto;
 }
@@ -1227,6 +1256,40 @@ textarea.form-control {
   .header-menu__trigger {
     width: 100%;
   }
+
+  .signature-pad-modal__content {
+    min-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .signature-pad-modal__body {
+    padding-bottom: 0.75rem;
+  }
+
+  .signature-pad-modal__canvas-wrap {
+    min-height: 54dvh;
+    padding: 0.2rem;
+  }
+
+  .signature-canvas--expanded {
+    min-height: 54dvh;
+  }
+}
+
+@media (orientation: landscape) and (max-width: 1024px) {
+  .signature-pad-modal__content {
+    min-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .signature-pad-modal__canvas-wrap {
+    min-height: 64dvh;
+  }
+
+  .signature-canvas--expanded {
+    min-height: 64dvh;
+  }
+
 
   .wizard-steps {
     grid-template-columns: 1fr;

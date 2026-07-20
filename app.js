@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.42';
+const APP_VERSION = '1.43';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -467,6 +467,8 @@ const state = {
   dynamicContractRenderKey: '',
   generatedPdfBytes: null,
   signatureDataUrl: '',
+  signaturePadModalOpen: false,
+  signatureOrientationLocked: false,
   isDrawing: false,
   lastPoint: null,
   autosaveTimer: null,
@@ -511,9 +513,13 @@ const elements = {
   contractLoadList: document.getElementById('contractLoadList'),
   contractLoadStatus: document.getElementById('contractLoadStatus'),
   signatureCanvas: document.getElementById('signatureCanvas'),
+  signatureCanvasExpanded: document.getElementById('signatureCanvasExpanded'),
   signatureUpload: document.getElementById('signatureUpload'),
   signatureInfo: document.getElementById('signatureInfo'),
   signatureError: document.getElementById('signatureError'),
+  signaturePadModal: document.getElementById('signaturePadModal'),
+  signaturePadModalHint: document.getElementById('signaturePadModalHint'),
+  signaturePadModalStatus: document.getElementById('signaturePadModalStatus'),
   btnNuovo: document.getElementById('btnNuovo'),
   btnImportContractPdf: document.getElementById('btnImportContractPdf'),
   btnSalva: document.getElementById('btnSalva'),
@@ -522,6 +528,9 @@ const elements = {
   btnCaricaFirma: document.getElementById('btnCaricaFirma'),
   btnPulisciFirma: document.getElementById('btnPulisciFirma'),
   btnInserisciFirma: document.getElementById('btnInserisciFirma'),
+  btnOpenSignaturePad: document.getElementById('btnOpenSignaturePad'),
+  btnClearSignaturePadModal: document.getElementById('btnClearSignaturePadModal'),
+  btnApplySignaturePadModal: document.getElementById('btnApplySignaturePadModal'),
   btnUsaTemplate: document.getElementById('btnUsaTemplate'),
   btnResetTemplate: document.getElementById('btnResetTemplate'),
   btnPrev: document.getElementById('btnPrev'),
@@ -620,6 +629,25 @@ function bindEvents() {
   elements.signatureUpload.addEventListener('change', handleSignatureUpload);
   elements.btnPulisciFirma.addEventListener('click', clearSignatureCanvas);
   elements.btnInserisciFirma.addEventListener('click', captureSignature);
+  elements.btnOpenSignaturePad?.addEventListener('click', () => {
+    void openExpandedSignaturePad();
+  });
+  elements.btnClearSignaturePadModal?.addEventListener('click', clearExpandedSignatureCanvas);
+  elements.btnApplySignaturePadModal?.addEventListener('click', () => {
+    void applyExpandedSignaturePad();
+  });
+  elements.signaturePadModal?.addEventListener('shown.bs.modal', () => {
+    void handleExpandedSignaturePadShown();
+  });
+  elements.signaturePadModal?.addEventListener('hidden.bs.modal', () => {
+    void handleExpandedSignaturePadHidden();
+  });
+  window.addEventListener('resize', () => {
+    void handleExpandedSignatureViewportChange();
+  });
+  window.addEventListener('orientationchange', () => {
+    void handleExpandedSignatureViewportChange();
+  });
   elements.contractType.addEventListener('change', handleContractTypeChange);
   elements.contractTypeMenu?.addEventListener('click', (event) => {
     const trigger = event.target.closest('[data-contract-type]');
@@ -2055,50 +2083,86 @@ function handleContractTypeChange({ suppressStatus = false } = {}) {
 }
 
 function initializeCanvas() {
-  const ctx = elements.signatureCanvas.getContext('2d');
+  bindSignatureCanvas(elements.signatureCanvas);
+  bindSignatureCanvas(elements.signatureCanvasExpanded);
+}
+
+function getCanvasPoint(event) {
+  return getCanvasPointForCanvas(elements.signatureCanvas, event);
+}
+
+function bindSignatureCanvas(canvas) {
+  if (!canvas || canvas.dataset.signatureCanvasBound === 'true') {
+    return;
+  }
+
+  const ctx = canvas.getContext('2d');
+  configureSignatureCanvasContext(ctx);
+  canvas.__signatureDrawingState = {
+    isDrawing: false,
+    lastPoint: null,
+  };
+
+  const start = (event) => {
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+    const drawingState = canvas.__signatureDrawingState;
+    drawingState.isDrawing = true;
+    drawingState.lastPoint = getCanvasPointForCanvas(canvas, event);
+  };
+
+  const move = (event) => {
+    const drawingState = canvas.__signatureDrawingState;
+    if (!drawingState?.isDrawing) {
+      return;
+    }
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+    const point = getCanvasPointForCanvas(canvas, event);
+    ctx.beginPath();
+    ctx.moveTo(drawingState.lastPoint.x, drawingState.lastPoint.y);
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+    drawingState.lastPoint = point;
+  };
+
+  const end = () => {
+    const drawingState = canvas.__signatureDrawingState;
+    if (!drawingState) {
+      return;
+    }
+    drawingState.isDrawing = false;
+    drawingState.lastPoint = null;
+  };
+
+  canvas.addEventListener('mousedown', start);
+  canvas.addEventListener('mousemove', move);
+  canvas.addEventListener('mouseup', end);
+  canvas.addEventListener('mouseleave', end);
+  canvas.addEventListener('touchstart', start, { passive: false });
+  canvas.addEventListener('touchmove', move, { passive: false });
+  canvas.addEventListener('touchend', end);
+  canvas.addEventListener('touchcancel', end);
+  canvas.dataset.signatureCanvasBound = 'true';
+}
+
+function configureSignatureCanvasContext(ctx) {
+  if (!ctx) {
+    return;
+  }
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.lineWidth = 2.5;
   ctx.strokeStyle = '#111';
-
-  const start = (event) => {
-    state.isDrawing = true;
-    state.lastPoint = getCanvasPoint(event);
-  };
-
-  const move = (event) => {
-    if (!state.isDrawing) {
-      return;
-    }
-    event.preventDefault();
-    const point = getCanvasPoint(event);
-    ctx.beginPath();
-    ctx.moveTo(state.lastPoint.x, state.lastPoint.y);
-    ctx.lineTo(point.x, point.y);
-    ctx.stroke();
-    state.lastPoint = point;
-  };
-
-  const end = () => {
-    state.isDrawing = false;
-    state.lastPoint = null;
-  };
-
-  elements.signatureCanvas.addEventListener('mousedown', start);
-  elements.signatureCanvas.addEventListener('mousemove', move);
-  elements.signatureCanvas.addEventListener('mouseup', end);
-  elements.signatureCanvas.addEventListener('mouseleave', end);
-  elements.signatureCanvas.addEventListener('touchstart', start, { passive: false });
-  elements.signatureCanvas.addEventListener('touchmove', move, { passive: false });
-  elements.signatureCanvas.addEventListener('touchend', end);
-  elements.signatureCanvas.addEventListener('touchcancel', end);
 }
 
-function getCanvasPoint(event) {
-  const rect = elements.signatureCanvas.getBoundingClientRect();
+function getCanvasPointForCanvas(canvas, event) {
+  const rect = canvas.getBoundingClientRect();
   const source = event.touches ? event.touches[0] : event;
-  const scaleX = elements.signatureCanvas.width / rect.width;
-  const scaleY = elements.signatureCanvas.height / rect.height;
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
 
   return {
     x: (source.clientX - rect.left) * scaleX,
@@ -2107,11 +2171,14 @@ function getCanvasPoint(event) {
 }
 
 function clearSignatureCanvas(options = {}) {
-  const ctx = elements.signatureCanvas.getContext('2d');
-  ctx.clearRect(0, 0, elements.signatureCanvas.width, elements.signatureCanvas.height);
+  clearCanvasElement(elements.signatureCanvas);
+  clearCanvasElement(elements.signatureCanvasExpanded);
   state.signatureDataUrl = '';
   elements.signatureInfo.textContent = 'Nessuna firma acquisita.';
   elements.signatureError.textContent = '';
+  if (elements.signaturePadModalStatus) {
+    elements.signaturePadModalStatus.textContent = 'Puoi firmare con dito, penna o mouse.';
+  }
   if (!options.silent) {
     setStatus('Firma cancellata dal canvas.', 'secondary');
   }
@@ -2121,30 +2188,212 @@ function clearSignatureCanvas(options = {}) {
 }
 
 function captureSignature() {
-  if (isCanvasBlank()) {
+  if (isCanvasBlank(elements.signatureCanvas)) {
     elements.signatureError.textContent = 'Disegna prima una firma valida.';
     setStatus('Disegna prima una firma sul canvas.', 'warning');
     return;
   }
 
-  state.signatureDataUrl = elements.signatureCanvas.toDataURL('image/png');
-  elements.signatureInfo.textContent = 'Firma acquisita e pronta per essere inserita nel PDF.';
-  elements.signatureError.textContent = '';
-  resetGeneratedPdf();
-  triggerAutosave();
-  refreshUi();
-  setStatus('Firma acquisita correttamente.', 'success');
+  persistSignatureFromMainCanvas({
+    infoMessage: 'Firma acquisita e pronta per essere inserita nel PDF.',
+    successMessage: 'Firma acquisita correttamente.',
+  });
 }
 
-function isCanvasBlank() {
-  const ctx = elements.signatureCanvas.getContext('2d');
-  const pixels = ctx.getImageData(0, 0, elements.signatureCanvas.width, elements.signatureCanvas.height).data;
+function isCanvasBlank(canvas = elements.signatureCanvas) {
+  if (!canvas) {
+    return true;
+  }
+  const ctx = canvas.getContext('2d');
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
   for (let i = 3; i < pixels.length; i += 4) {
     if (pixels[i] !== 0) {
       return false;
     }
   }
   return true;
+}
+
+function clearCanvasElement(canvas) {
+  if (!canvas) {
+    return;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function persistSignatureFromMainCanvas({ infoMessage, successMessage } = {}) {
+  state.signatureDataUrl = elements.signatureCanvas.toDataURL('image/png');
+  elements.signatureInfo.textContent = infoMessage || 'Firma acquisita e pronta per essere inserita nel PDF.';
+  elements.signatureError.textContent = '';
+  if (state.signaturePadModalOpen && elements.signaturePadModalStatus) {
+    elements.signaturePadModalStatus.textContent = 'Firma pronta: conferma o continua a rifinire il tratto.';
+  }
+  resetGeneratedPdf();
+  triggerAutosave();
+  refreshUi();
+  setStatus(successMessage || 'Firma acquisita correttamente.', 'success');
+}
+
+function isCompactSignatureDevice() {
+  return window.matchMedia('(max-width: 1024px), (pointer: coarse)').matches;
+}
+
+async function openExpandedSignaturePad() {
+  await syncExpandedSignatureCanvasFromMain();
+  updateExpandedSignaturePadTexts();
+  const modal = window.bootstrap.Modal.getOrCreateInstance(elements.signaturePadModal);
+  modal.show();
+}
+
+async function handleExpandedSignaturePadShown() {
+  state.signaturePadModalOpen = true;
+  await resizeExpandedSignatureCanvas({ preserveCurrentDrawing: true });
+  updateExpandedSignaturePadTexts();
+  await enterExpandedSignatureImmersiveMode();
+}
+
+async function handleExpandedSignaturePadHidden() {
+  state.signaturePadModalOpen = false;
+  await exitExpandedSignatureImmersiveMode();
+}
+
+async function handleExpandedSignatureViewportChange() {
+  if (!state.signaturePadModalOpen) {
+    return;
+  }
+  await resizeExpandedSignatureCanvas({ preserveCurrentDrawing: true });
+  updateExpandedSignaturePadTexts();
+}
+
+async function syncExpandedSignatureCanvasFromMain() {
+  await resizeExpandedSignatureCanvas({ preserveCurrentDrawing: true });
+  if (!elements.signatureCanvasExpanded) {
+    return;
+  }
+  const sourceDataUrl = !isCanvasBlank(elements.signatureCanvas)
+    ? elements.signatureCanvas.toDataURL('image/png')
+    : state.signatureDataUrl;
+  if (!sourceDataUrl) {
+    clearCanvasElement(elements.signatureCanvasExpanded);
+    return;
+  }
+  await drawImageDataUrlOnCanvas(elements.signatureCanvasExpanded, sourceDataUrl);
+}
+
+async function resizeExpandedSignatureCanvas({ preserveCurrentDrawing = true } = {}) {
+  const canvas = elements.signatureCanvasExpanded;
+  const container = canvas?.parentElement;
+  if (!canvas || !container) {
+    return;
+  }
+
+  const rect = container.getBoundingClientRect();
+  if (!rect.width || !rect.height) {
+    return;
+  }
+
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  const nextWidth = Math.max(1200, Math.round(rect.width * pixelRatio));
+  const nextHeight = Math.max(420, Math.round(rect.height * pixelRatio));
+  if (canvas.width === nextWidth && canvas.height === nextHeight) {
+    return;
+  }
+
+  const snapshot = preserveCurrentDrawing && !isCanvasBlank(canvas)
+    ? canvas.toDataURL('image/png')
+    : '';
+  canvas.width = nextWidth;
+  canvas.height = nextHeight;
+  configureSignatureCanvasContext(canvas.getContext('2d'));
+
+  if (snapshot) {
+    await drawImageDataUrlOnCanvas(canvas, snapshot);
+  }
+}
+
+function clearExpandedSignatureCanvas() {
+  clearCanvasElement(elements.signatureCanvasExpanded);
+  if (elements.signaturePadModalStatus) {
+    elements.signaturePadModalStatus.textContent = 'Area firma estesa pulita. Ridisegna la firma con più spazio.';
+  }
+}
+
+async function applyExpandedSignaturePad() {
+  if (isCanvasBlank(elements.signatureCanvasExpanded)) {
+    elements.signatureError.textContent = 'Disegna prima una firma valida.';
+    if (elements.signaturePadModalStatus) {
+      elements.signaturePadModalStatus.textContent = 'Disegna prima una firma valida nella superficie estesa.';
+    }
+    setStatus('Disegna prima una firma nell area estesa.', 'warning');
+    return;
+  }
+
+  await drawImageDataUrlOnCanvas(
+    elements.signatureCanvas,
+    elements.signatureCanvasExpanded.toDataURL('image/png'),
+  );
+  persistSignatureFromMainCanvas({
+    infoMessage: 'Firma acquisita dalla modalità estesa e pronta per il PDF.',
+    successMessage: 'Firma acquisita correttamente dalla modalità estesa.',
+  });
+  const modal = window.bootstrap.Modal.getOrCreateInstance(elements.signaturePadModal);
+  modal.hide();
+}
+
+function updateExpandedSignaturePadTexts() {
+  if (!elements.signaturePadModalHint || !elements.signaturePadModalStatus) {
+    return;
+  }
+  const compactDevice = isCompactSignatureDevice();
+  const landscape = window.matchMedia('(orientation: landscape)').matches;
+  if (compactDevice && !landscape) {
+    elements.signaturePadModalHint.textContent = 'Ruota il dispositivo in orizzontale per una firma più comoda. Se supportato, la modalità estesa prova a favorire questa rotazione.';
+    elements.signaturePadModalStatus.textContent = 'Suggerimento: usa l orientamento orizzontale per avere più spazio di firma.';
+    return;
+  }
+  elements.signaturePadModalHint.textContent = 'Disegna la firma in un area più ampia. Su tablet e smartphone conviene usare l orientamento orizzontale.';
+  elements.signaturePadModalStatus.textContent = 'Puoi firmare con dito, penna o mouse.';
+}
+
+async function enterExpandedSignatureImmersiveMode() {
+  if (!isCompactSignatureDevice()) {
+    return;
+  }
+  const fullscreenTarget = elements.signaturePadModal?.querySelector('.signature-pad-modal__content') || elements.signaturePadModal;
+  if (!document.fullscreenElement && fullscreenTarget && typeof fullscreenTarget.requestFullscreen === 'function') {
+    try {
+      await fullscreenTarget.requestFullscreen();
+    } catch (_error) {
+      // Alcuni browser mobili non consentono il fullscreen da modal.
+    }
+  }
+  if (window.screen?.orientation && typeof window.screen.orientation.lock === 'function') {
+    try {
+      await window.screen.orientation.lock('landscape');
+      state.signatureOrientationLocked = true;
+    } catch (_error) {
+      state.signatureOrientationLocked = false;
+    }
+  }
+}
+
+async function exitExpandedSignatureImmersiveMode() {
+  if (state.signatureOrientationLocked && window.screen?.orientation && typeof window.screen.orientation.unlock === 'function') {
+    try {
+      window.screen.orientation.unlock();
+    } catch (_error) {
+      // Ignora browser che non supportano unlock.
+    }
+  }
+  state.signatureOrientationLocked = false;
+  if (document.fullscreenElement && typeof document.exitFullscreen === 'function') {
+    try {
+      await document.exitFullscreen();
+    } catch (_error) {
+      // Ignora chiusure fullscreen non disponibili.
+    }
+  }
 }
 
 function setDefaultDates() {
@@ -2555,13 +2804,10 @@ async function handleSignatureUpload() {
   try {
     const dataUrl = await readFileAsDataUrl(file);
     await drawImageDataUrlOnSignatureCanvas(dataUrl);
-    state.signatureDataUrl = elements.signatureCanvas.toDataURL('image/png');
-    elements.signatureInfo.textContent = `Firma caricata da immagine: ${file.name}`;
-    elements.signatureError.textContent = '';
-    resetGeneratedPdf();
-    triggerAutosave();
-    refreshUi();
-    setStatus('Immagine firma caricata correttamente.', 'success');
+    persistSignatureFromMainCanvas({
+      infoMessage: `Firma caricata da immagine: ${file.name}`,
+      successMessage: 'Immagine firma caricata correttamente.',
+    });
   } catch (error) {
     elements.signatureError.textContent = 'Impossibile caricare l immagine della firma.';
     setStatus(elements.signatureError.textContent, 'danger');
@@ -2580,13 +2826,22 @@ function readFileAsDataUrl(file) {
 }
 
 async function drawImageDataUrlOnSignatureCanvas(dataUrl) {
+  await drawImageDataUrlOnCanvas(elements.signatureCanvas, dataUrl);
+  if (state.signaturePadModalOpen) {
+    await drawImageDataUrlOnCanvas(elements.signatureCanvasExpanded, dataUrl);
+  }
+}
+
+async function drawImageDataUrlOnCanvas(canvas, dataUrl) {
+  if (!canvas) {
+    return;
+  }
   const preparedDataUrl = await getPreparedSignatureDataUrl(dataUrl);
   const image = await loadImageFromDataUrl(preparedDataUrl);
-  const canvas = elements.signatureCanvas;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const padding = 16;
+  const padding = canvas === elements.signatureCanvasExpanded ? 24 : 16;
   const maxWidth = canvas.width - padding * 2;
   const maxHeight = canvas.height - padding * 2;
   const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
@@ -2770,13 +3025,10 @@ function setSelectFieldValue(field, value) {
 }
 
 function restoreSignature(dataUrl) {
-  const image = new Image();
-  image.onload = () => {
-    const ctx = elements.signatureCanvas.getContext('2d');
-    ctx.clearRect(0, 0, elements.signatureCanvas.width, elements.signatureCanvas.height);
-    ctx.drawImage(image, 0, 0, elements.signatureCanvas.width, elements.signatureCanvas.height);
-  };
-  image.src = dataUrl;
+  void drawImageDataUrlOnCanvas(elements.signatureCanvas, dataUrl);
+  if (state.signaturePadModalOpen) {
+    void drawImageDataUrlOnCanvas(elements.signatureCanvasExpanded, dataUrl);
+  }
 }
 
 async function selectManualTemplate() {

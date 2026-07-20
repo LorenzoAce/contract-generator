@@ -631,6 +631,12 @@
                       <label class="form-label required d-block">Disegna firma</label>
                       <canvas id="signatureCanvas" width="900" height="260" class="signature-canvas"></canvas>
                       <div class="invalid-feedback d-block" id="signatureError"></div>
+                      <div class="d-grid d-sm-flex gap-2 mt-3">
+                        <button type="button" class="btn btn-outline-secondary" id="btnOpenSignaturePad">
+                          Apri area firma estesa
+                        </button>
+                      </div>
+                      <div class="form-text mt-2">Su smartphone e tablet puoi aprire una superficie più ampia per firmare meglio, anche in orizzontale.</div>
                       <div class="surface-panel mt-3" id="presentedByPanel">
                         <div class="section-heading">Presentato da</div>
                         <input type="text" class="form-control" id="presentedBy" name="presentedBy" placeholder="Es. Nome e Cognome">
@@ -893,6 +899,32 @@
         </div>
         <div class="modal-footer border-0 pt-0">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Chiudi</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="signaturePadModal" tabindex="-1" aria-labelledby="signaturePadModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-lg-down modal-xl signature-pad-modal__dialog">
+      <div class="modal-content border-0 shadow-lg signature-pad-modal__content">
+        <div class="modal-header border-0 pb-0">
+          <div>
+            <div class="eyebrow text-dark mb-2">Firma</div>
+            <h2 class="h4 mb-1" id="signaturePadModalLabel">Area firma estesa</h2>
+            <p class="text-secondary mb-0" id="signaturePadModalHint">Disegna la firma in un area più ampia. Su tablet e smartphone conviene usare l orientamento orizzontale.</p>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+        </div>
+        <div class="modal-body pt-3 signature-pad-modal__body">
+          <div class="signature-pad-modal__canvas-wrap">
+            <canvas id="signatureCanvasExpanded" width="1400" height="700" class="signature-canvas signature-canvas--expanded"></canvas>
+          </div>
+          <div class="small text-secondary mt-3" id="signaturePadModalStatus">Puoi firmare con dito, penna o mouse.</div>
+        </div>
+        <div class="modal-footer border-0 pt-0 d-flex flex-column flex-sm-row gap-2">
+          <button type="button" class="btn btn-outline-dark w-100 w-sm-auto" id="btnClearSignaturePadModal">Cancella</button>
+          <button type="button" class="btn btn-outline-secondary w-100 w-sm-auto" data-bs-dismiss="modal">Chiudi</button>
+          <button type="button" class="btn btn-primary w-100 w-sm-auto" id="btnApplySignaturePadModal">Usa questa firma</button>
         </div>
       </div>
     </div>

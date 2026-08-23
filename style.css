@@ -274,9 +274,10 @@ body.app-shell {
   flex-shrink: 0;
 }
 
-.brand-mark svg {
+.brand-mark__image {
   width: 1.95rem;
   height: 1.95rem;
+  object-fit: contain;
 }
 
 .brand-copy {
@@ -1262,7 +1263,7 @@ textarea.form-control {
     height: 2.6rem;
   }
 
-  .brand-mark svg {
+  .brand-mark__image {
     width: 2rem;
     height: 2rem;
   }

@@ -5568,18 +5568,36 @@ function setGeneratedPdf(pdfBytes) {
   state.generatedPdfBytes = pdfBytes;
 }
 
+function buildGeneratedPdfFileName() {
+  const contractConfig = getCurrentContractConfig();
+  const rawTemplateName = sanitizeText(
+    state.selectedTemplateName
+      || contractConfig?.importedTemplate?.template_name
+      || contractConfig?.templateCandidates?.[0]
+      || contractConfig?.label
+      || 'contratto'
+  );
+
+  const baseName = rawTemplateName
+    .split(/[\\/]/)
+    .pop()
+    .replace(/(\.pdf)+$/i, '')
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-')
+    .trim();
+
+  return `${baseName || 'contratto'}.pdf`;
+}
+
 function downloadGeneratedPdf() {
   if (!state.generatedPdfBytes) {
     return;
   }
 
-  const companyName = sanitizeText(document.getElementById('companyName').value) || 'contratto';
-  const safeName = companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   const blob = new Blob([state.generatedPdfBytes], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `${safeName || 'contratto'}-compilato.pdf`;
+  link.download = buildGeneratedPdfFileName();
   link.style.display = 'none';
   document.body.appendChild(link);
   link.click();

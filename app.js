@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.53';
+const APP_VERSION = '1.54';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -511,6 +511,7 @@ const elements = {
   contractSaveModal: document.getElementById('contractSaveModal'),
   contractSaveName: document.getElementById('contractSaveName'),
   contractSaveStatus: document.getElementById('contractSaveStatus'),
+  contractSaveHint: document.getElementById('contractSaveHint'),
   btnContractSaveNew: document.getElementById('btnContractSaveNew'),
   btnContractSaveUpdate: document.getElementById('btnContractSaveUpdate'),
   contractLoadModal: document.getElementById('contractLoadModal'),
@@ -2896,6 +2897,8 @@ function saveToLocalStorage({ silent = false } = {}) {
   const payload = collectFormData();
   payload.signatureDataUrl = state.signatureDataUrl;
   payload.currentStep = state.currentStep;
+  payload.contractId = state.currentContractId;
+  payload.contractName = state.currentContractName;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   updateAutosaveIndicator('saved');
   if (!silent) {
@@ -2937,6 +2940,8 @@ function loadFromLocalStorage({ silent = false, notifyIfMissing = true } = {}) {
     clearValidation();
     resetGeneratedPdf();
     state.currentStep = clampStep(Number(data.currentStep) || 0);
+    state.currentContractId = sanitizeText(data.contractId);
+    state.currentContractName = sanitizeText(data.contractName);
     refreshUi();
     updateAutosaveIndicator('saved');
     if (!silent) {
@@ -3738,7 +3743,13 @@ function openContractSaveModal() {
   const defaultName = buildDefaultContractName();
   elements.contractSaveName.value = state.currentContractName || defaultName;
   elements.contractSaveStatus.textContent = 'Pronto.';
-  elements.btnContractSaveUpdate.disabled = !state.currentContractId;
+  const hasCurrent = Boolean(state.currentContractId);
+  elements.btnContractSaveUpdate.disabled = !hasCurrent;
+  if (elements.contractSaveHint) {
+    elements.contractSaveHint.textContent = hasCurrent
+      ? `Stai modificando il contratto salvato "${state.currentContractName || 'senza nome'}": usa "Aggiorna" per sovrascriverlo.`
+      : 'Nessun contratto salvato collegato: "Aggiorna" è disabilitato, usa "Salva nuovo".';
+  }
   const modal = window.bootstrap.Modal.getOrCreateInstance(elements.contractSaveModal);
   modal.show();
 }
@@ -4073,6 +4084,7 @@ async function deleteContractFromCloud(id) {
     if (state.currentContractId === id) {
       state.currentContractId = '';
       state.currentContractName = '';
+      saveToLocalStorage({ silent: true });
     }
     setStatus('Contratto eliminato.', 'secondary');
   } catch (error) {

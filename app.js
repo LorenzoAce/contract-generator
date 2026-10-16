@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.50';
+const APP_VERSION = '1.51';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -478,6 +478,7 @@ const state = {
   autosaveTimer: null,
   importedContractDraft: null,
   importedContractPdfUrl: '',
+  pendingStepTarget: null,
 };
 
 const elements = {
@@ -578,6 +579,8 @@ const elements = {
   contractPreviewStatus: document.getElementById('contractPreviewStatus'),
   contractPreviewOpenLink: document.getElementById('contractPreviewOpenLink'),
   signatureSuccessModal: document.getElementById('signatureSuccessModal'),
+  stepIncompleteModal: document.getElementById('stepIncompleteModal'),
+  btnStepIncompleteConfirm: document.getElementById('btnStepIncompleteConfirm'),
   importContractModal: document.getElementById('importContractModal'),
   importContractFile: document.getElementById('importContractFile'),
   importContractName: document.getElementById('importContractName'),
@@ -673,6 +676,16 @@ function bindEvents() {
   });
   elements.contractPreviewModal?.addEventListener('hidden.bs.modal', () => {
     releaseContractPreviewObjectUrl();
+  });
+  elements.btnStepIncompleteConfirm?.addEventListener('click', () => {
+    const modalElement = elements.stepIncompleteModal;
+    if (modalElement && window.bootstrap?.Modal) {
+      window.bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+    }
+    proceedToPendingStep();
+  });
+  elements.stepIncompleteModal?.addEventListener('hidden.bs.modal', () => {
+    state.pendingStepTarget = null;
   });
   elements.btnClearSignaturePadModal?.addEventListener('click', clearExpandedSignatureCanvas);
   elements.btnApplySignaturePadModal?.addEventListener('click', () => {
@@ -4200,20 +4213,47 @@ function toggleCriminalFields() {
   }
 }
 
-function goToStep(stepIndex, { validateCurrent = true } = {}) {
+function goToStep(stepIndex, { validateCurrent = true, force = false } = {}) {
   const targetStep = clampStep(stepIndex);
   if (targetStep === state.currentStep) {
     return;
   }
 
-  if (validateCurrent && targetStep > state.currentStep) {
-    validateStep(state.currentStep, { silent: false });
+  if (validateCurrent && !force && targetStep > state.currentStep) {
+    const valid = validateStep(state.currentStep, { silent: false });
+    if (!valid) {
+      requestIncompleteStepConfirmation(targetStep);
+      return;
+    }
   }
 
   state.currentStep = targetStep;
   refreshUi();
   triggerAutosave();
   scrollWizardTop();
+}
+
+function requestIncompleteStepConfirmation(targetStep) {
+  state.pendingStepTarget = targetStep;
+  const modalElement = elements.stepIncompleteModal;
+  if (modalElement && window.bootstrap?.Modal) {
+    window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    return;
+  }
+  if (window.confirm('Uno o piu campi di questa fase non sono compilati. Vuoi dare OK e proseguire comunque?')) {
+    proceedToPendingStep();
+  } else {
+    state.pendingStepTarget = null;
+  }
+}
+
+function proceedToPendingStep() {
+  const targetStep = state.pendingStepTarget;
+  state.pendingStepTarget = null;
+  if (targetStep === null || targetStep === undefined) {
+    return;
+  }
+  goToStep(targetStep, { validateCurrent: true, force: true });
 }
 
 function clampStep(stepIndex) {
@@ -4284,11 +4324,28 @@ function updateStepperStatus() {
   const buttons = elements.stepperNav.querySelectorAll('[data-target-step]');
   buttons.forEach((button) => {
     const targetStep = Number(button.dataset.targetStep);
-    const valid = validateStep(targetStep, { silent: true });
+    const ok = validateStep(targetStep, { silent: true }) || stepHasAnyValue(targetStep);
     const status = button.querySelector('.step-nav__status');
     button.classList.toggle('is-current', targetStep === state.currentStep);
-    button.classList.toggle('is-complete', valid);
-    status.textContent = valid ? 'OK' : targetStep === state.currentStep ? 'Ora' : 'Dopo';
+    button.classList.toggle('is-complete', ok);
+    status.textContent = ok ? 'OK' : targetStep === state.currentStep ? 'Ora' : 'Dopo';
+  });
+}
+
+function stepHasAnyValue(stepIndex) {
+  const section = elements.wizardSteps.find((element) => Number(element.dataset.step) === stepIndex);
+  if (!section) {
+    return false;
+  }
+  const fields = section.querySelectorAll('input, textarea, select');
+  return Array.from(fields).some((field) => {
+    if (field.disabled || field.type === 'file' || field.type === 'hidden' || !field.offsetParent) {
+      return false;
+    }
+    if (field.type === 'radio' || field.type === 'checkbox') {
+      return field.checked;
+    }
+    return sanitizeText(field.value) !== '';
   });
 }
 

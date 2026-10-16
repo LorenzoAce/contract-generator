@@ -16,7 +16,7 @@
         <div class="brand-block">
           <img src="./assets/logos/contract-generator-logo.png" alt="" class="brand-mark">
           <div class="brand-copy">
-            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.50</span></h1>
+            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.51</span></h1>
             <p class="hero-copy mb-0">Compilazione guidata del contratto e degli allegati in pochi passaggi.</p>
           </div>
         </div>
@@ -959,6 +959,24 @@
           <h2 class="h5 mt-3 mb-1" id="signatureSuccessModalLabel">Firma inserita correttamente</h2>
           <p class="text-secondary mb-3">La firma del contratto e stata registrata.</p>
           <button type="button" class="btn btn-success" data-bs-dismiss="modal">Chiudi</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="stepIncompleteModal" tabindex="-1" aria-labelledby="stepIncompleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title h5" id="stepIncompleteModalLabel">Campi non compilati</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-0">In questa fase uno o piu campi non sono compilati. Vuoi dare OK e proseguire comunque?</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Resta qui</button>
+          <button type="button" class="btn btn-primary" id="btnStepIncompleteConfirm">OK, prosegui</button>
         </div>
       </div>
     </div>

@@ -1216,6 +1216,24 @@ body.sign-mode #btnShareSignatureWhatsApp {
   display: none !important;
 }
 
+.sign-mode-loader {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 1rem;
+  text-align: center;
+  color: #475569;
+}
+
+body.sign-mode-loading .wizard-step {
+  display: none !important;
+}
+
+body.sign-mode-loading .sign-mode-loader {
+  display: flex;
+}
+
 .contract-preview-frame {
   width: 100%;
   height: 70vh;

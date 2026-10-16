@@ -16,7 +16,7 @@
         <div class="brand-block">
           <img src="./assets/logos/contract-generator-logo.png" alt="" class="brand-mark">
           <div class="brand-copy">
-            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.47</span></h1>
+            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.48</span></h1>
             <p class="hero-copy mb-0">Compilazione guidata del contratto e degli allegati in pochi passaggi.</p>
           </div>
         </div>
@@ -106,6 +106,10 @@
       <div class="col-12 col-xl-8 col-xxl-9">
         <form id="contractForm" novalidate>
           <div class="vstack gap-4">
+            <div class="sign-mode-loader" id="signModeLoader">
+              <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+              <p class="mt-3 mb-0">Caricamento del contratto...</p>
+            </div>
             <section class="wizard-step active" data-step="0">
               <div class="step-card shadow-sm">
                 <div class="step-card__header">

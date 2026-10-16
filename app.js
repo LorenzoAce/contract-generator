@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.46';
+const APP_VERSION = '1.47';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -572,6 +572,11 @@ const elements = {
   documentStepDefaultFields: document.getElementById('documentStepDefaultFields'),
   presentedByPanel: document.getElementById('presentedByPanel'),
   placeAndDateGroup: document.getElementById('placeAndDateGroup'),
+  btnPreviewContractPdf: document.getElementById('btnPreviewContractPdf'),
+  contractPreviewModal: document.getElementById('contractPreviewModal'),
+  contractPreviewFrame: document.getElementById('contractPreviewFrame'),
+  contractPreviewStatus: document.getElementById('contractPreviewStatus'),
+  contractPreviewOpenLink: document.getElementById('contractPreviewOpenLink'),
   importContractModal: document.getElementById('importContractModal'),
   importContractFile: document.getElementById('importContractFile'),
   importContractName: document.getElementById('importContractName'),
@@ -651,6 +656,12 @@ function bindEvents() {
   });
   elements.btnOpenSignaturePad?.addEventListener('click', () => {
     void openExpandedSignaturePad();
+  });
+  elements.btnPreviewContractPdf?.addEventListener('click', () => {
+    void openContractPdfPreview();
+  });
+  elements.contractPreviewModal?.addEventListener('hidden.bs.modal', () => {
+    releaseContractPreviewObjectUrl();
   });
   elements.btnClearSignaturePadModal?.addEventListener('click', clearExpandedSignatureCanvas);
   elements.btnApplySignaturePadModal?.addEventListener('click', () => {
@@ -3853,6 +3864,56 @@ async function shareSignatureLinkViaWhatsApp() {
   }
 }
 
+let contractPreviewObjectUrl = '';
+
+function releaseContractPreviewObjectUrl() {
+  if (contractPreviewObjectUrl) {
+    URL.revokeObjectURL(contractPreviewObjectUrl);
+    contractPreviewObjectUrl = '';
+  }
+  elements.contractPreviewFrame?.removeAttribute('src');
+}
+
+async function openContractPdfPreview() {
+  if (!elements.contractPreviewModal || !window.bootstrap?.Modal) {
+    return;
+  }
+
+  releaseContractPreviewObjectUrl();
+  elements.contractPreviewFrame?.classList.add('d-none');
+  elements.contractPreviewOpenLink?.classList.add('d-none');
+  elements.contractPreviewOpenLink?.removeAttribute('href');
+  if (elements.contractPreviewStatus) {
+    elements.contractPreviewStatus.textContent = 'Generazione anteprima PDF...';
+    elements.contractPreviewStatus.classList.remove('d-none');
+  }
+
+  window.bootstrap.Modal.getOrCreateInstance(elements.contractPreviewModal).show();
+
+  try {
+    const pdfBytes = await buildPdf();
+    if (!pdfBytes) {
+      throw new Error("Impossibile generare l'anteprima del contratto.");
+    }
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    contractPreviewObjectUrl = URL.createObjectURL(blob);
+    if (elements.contractPreviewFrame) {
+      elements.contractPreviewFrame.src = contractPreviewObjectUrl;
+      elements.contractPreviewFrame.classList.remove('d-none');
+    }
+    if (elements.contractPreviewOpenLink) {
+      elements.contractPreviewOpenLink.href = contractPreviewObjectUrl;
+      elements.contractPreviewOpenLink.classList.remove('d-none');
+    }
+    elements.contractPreviewStatus?.classList.add('d-none');
+  } catch (error) {
+    if (elements.contractPreviewStatus) {
+      elements.contractPreviewStatus.textContent = error.message || 'Errore durante la generazione dell\'anteprima.';
+      elements.contractPreviewStatus.classList.remove('d-none');
+    }
+  }
+}
+
 async function startSignatureLinkMode(id) {
   const normalizedId = sanitizeText(id);
   if (!normalizedId) {
@@ -3876,6 +3937,7 @@ async function startSignatureLinkMode(id) {
     state.currentStep = SIGNATURE_STEP_INDEX;
     elements.btnConfirmSignerSignature?.classList.remove('d-none');
     elements.btnInserisciFirma?.classList.add('d-none');
+    elements.btnPreviewContractPdf?.classList.remove('d-none');
     const label = sanitizeText(row?.name);
     elements.signatureInfo.textContent = label
       ? `Firma richiesta per: ${label}. Disegna la firma e conferma.`

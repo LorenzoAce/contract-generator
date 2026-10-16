@@ -16,7 +16,7 @@
         <div class="brand-block">
           <img src="./assets/logos/contract-generator-logo.png" alt="" class="brand-mark">
           <div class="brand-copy">
-            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.46</span></h1>
+            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.47</span></h1>
             <p class="hero-copy mb-0">Compilazione guidata del contratto e degli allegati in pochi passaggi.</p>
           </div>
         </div>
@@ -624,6 +624,9 @@
                         <button type="button" class="btn btn-outline-secondary" id="btnOpenSignaturePad">
                           Apri area firma estesa
                         </button>
+                        <button type="button" class="btn btn-outline-primary d-none" id="btnPreviewContractPdf">
+                          Visiona contratto
+                        </button>
                       </div>
                       <div class="form-text mt-2">Su smartphone e tablet puoi aprire una superficie più ampia per firmare meglio, anche in orizzontale.</div>
                       <div class="surface-panel mt-3" id="presentedByPanel">
@@ -915,6 +918,26 @@
           <button type="button" class="btn btn-outline-dark w-100 w-sm-auto signature-pad-modal__action" id="btnClearSignaturePadModal">Cancella</button>
           <button type="button" class="btn btn-outline-secondary w-100 w-sm-auto signature-pad-modal__action" data-bs-dismiss="modal">Chiudi</button>
           <button type="button" class="btn btn-primary w-100 w-sm-auto signature-pad-modal__action" id="btnApplySignaturePadModal">Usa questa firma</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="contractPreviewModal" tabindex="-1" aria-labelledby="contractPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header border-0 pb-0">
+          <div>
+            <div class="eyebrow text-dark mb-2">Anteprima contratto</div>
+            <h2 class="h4 mb-1" id="contractPreviewModalLabel">Contratto compilato dall'operatore</h2>
+            <p class="text-secondary mb-0">Consulta il contenuto del contratto prima di apporre la firma.</p>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+        </div>
+        <div class="modal-body pt-3">
+          <div class="alert alert-secondary mb-3 d-none" id="contractPreviewStatus" role="status"></div>
+          <a class="btn btn-outline-primary mb-3 d-none" id="contractPreviewOpenLink" href="#" target="_blank" rel="noopener">Apri il PDF in una nuova scheda</a>
+          <iframe class="contract-preview-frame d-none" id="contractPreviewFrame" title="Anteprima PDF del contratto"></iframe>
         </div>
       </div>
     </div>

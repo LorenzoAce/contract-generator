@@ -1210,6 +1210,21 @@ body.sign-mode .app-footer {
   display: none !important;
 }
 
+body.sign-mode #presentedByPanel,
+body.sign-mode #btnCaricaFirma,
+body.sign-mode #btnShareSignatureWhatsApp {
+  display: none !important;
+}
+
+.contract-preview-frame {
+  width: 100%;
+  height: 70vh;
+  min-height: 420px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 12px;
+  background-color: #f8fafc;
+}
+
 body.sign-mode .row {
   justify-content: center;
 }

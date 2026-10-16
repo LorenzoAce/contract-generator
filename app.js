@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.51';
+const APP_VERSION = '1.52';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -1865,12 +1865,7 @@ function renderStepper() {
 
   elements.stepperNav.querySelectorAll('[data-target-step]').forEach((button) => {
     button.addEventListener('click', () => {
-      const targetStep = Number(button.dataset.targetStep);
-      if (targetStep > state.currentStep) {
-        goToStep(targetStep, { validateCurrent: true });
-        return;
-      }
-      goToStep(targetStep, { validateCurrent: false });
+      goToStep(Number(button.dataset.targetStep), { validateCurrent: false });
     });
   });
 }

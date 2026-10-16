@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.48';
+const APP_VERSION = '1.49';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -577,6 +577,7 @@ const elements = {
   contractPreviewFrame: document.getElementById('contractPreviewFrame'),
   contractPreviewStatus: document.getElementById('contractPreviewStatus'),
   contractPreviewOpenLink: document.getElementById('contractPreviewOpenLink'),
+  signatureSuccessModal: document.getElementById('signatureSuccessModal'),
   importContractModal: document.getElementById('importContractModal'),
   importContractFile: document.getElementById('importContractFile'),
   importContractName: document.getElementById('importContractName'),
@@ -3987,6 +3988,9 @@ async function confirmSignerSignature() {
     setStatus('Firma inviata correttamente.', 'success');
     if (elements.btnConfirmSignerSignature) {
       elements.btnConfirmSignerSignature.disabled = true;
+    }
+    if (elements.signatureSuccessModal && window.bootstrap?.Modal) {
+      window.bootstrap.Modal.getOrCreateInstance(elements.signatureSuccessModal).show();
     }
   } catch (error) {
     elements.signatureInfo.textContent = error.message || 'Errore invio firma.';

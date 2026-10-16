@@ -1243,6 +1243,72 @@ body.sign-mode-loading .sign-mode-loader {
   background-color: #f8fafc;
 }
 
+.signature-success__arrow {
+  display: block;
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 0.35rem;
+  color: #16a34a;
+  animation: signatureSuccessArrow 1.4s ease-in-out infinite;
+}
+
+.signature-success__arrow path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.signature-success__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background-color: #16a34a;
+  animation: signatureSuccessPop 0.45s ease-out;
+}
+
+.signature-success__icon svg {
+  width: 46px;
+  height: 46px;
+}
+
+.signature-success__icon svg path {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@keyframes signatureSuccessArrow {
+  0%,
+  100% {
+    transform: translateY(-4px);
+  }
+  50% {
+    transform: translateY(4px);
+  }
+}
+
+@keyframes signatureSuccessPop {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 body.sign-mode .row {
   justify-content: center;
 }

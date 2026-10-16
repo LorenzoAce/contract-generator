@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.52';
+const APP_VERSION = '1.53';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
@@ -307,7 +307,7 @@ const TEXT_FIELD_MAPPING = {
   phone: 'telefono',
   mobile: 'cellulare',
   publicIp: 'indirizzo-ip',
-  salesContact: 'agente-commerciale',
+  presentedBy: 'agente-commerciale',
   cciaaNumber: 'numero-cciaa',
   cciaaChamber: 'provincia-cciaa',
   documentType: 'tipo-documento',
@@ -1945,9 +1945,6 @@ function handleFormInteraction(event) {
 
   if (target.matches('input, textarea, select')) {
     normalizeInputCase(target, { finalize: event.type === 'change' });
-    if (target.name === 'salesContact' || target.name === 'presentedBy') {
-      syncPresentedByFields({ sourceName: target.name });
-    }
     if (target.name === 'operationalSameAsLegal' || isCompanyLegalField(target.name)) {
       syncOperationalAddressFields({ sourceName: target.name });
     }
@@ -1957,48 +1954,6 @@ function handleFormInteraction(event) {
     }
     triggerAutosave();
     refreshUi();
-  }
-}
-
-function syncPresentedByFields({ sourceName } = {}) {
-  const salesField = elements.form.querySelector('[name="salesContact"]');
-  const presentedField = elements.form.querySelector('[name="presentedBy"]');
-  if (!salesField || !presentedField) {
-    return;
-  }
-
-  const salesValue = salesField.value ?? '';
-  const presentedValue = presentedField.value ?? '';
-
-  if (sourceName === 'salesContact') {
-    if (presentedValue !== salesValue) {
-      presentedField.value = salesValue;
-    }
-    return;
-  }
-
-  if (sourceName === 'presentedBy') {
-    if (salesValue !== presentedValue) {
-      salesField.value = presentedValue;
-    }
-    return;
-  }
-
-  const trimmedSales = sanitizeText(salesValue);
-  const trimmedPresented = sanitizeText(presentedValue);
-
-  if (trimmedSales && !trimmedPresented) {
-    presentedField.value = salesValue;
-    return;
-  }
-
-  if (!trimmedSales && trimmedPresented) {
-    salesField.value = presentedValue;
-    return;
-  }
-
-  if (trimmedSales && trimmedPresented && salesValue !== presentedValue) {
-    presentedField.value = salesValue;
   }
 }
 
@@ -4280,7 +4235,6 @@ function scrollWizardTop() {
 }
 
 function refreshUi() {
-  syncPresentedByFields();
   initializeLocationSelects();
   syncOperationalAddressFields();
   initializeCapSelects();
@@ -4702,7 +4656,6 @@ function validateActivityStep({ silent = false } = {}) {
     'cciaaChamber',
     'licenseScia',
     'publicIp',
-    'salesContact',
   ].every((name) => validateNamedField(name, { silent }));
 }
 

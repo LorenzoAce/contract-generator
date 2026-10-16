@@ -448,8 +448,12 @@ const STEP_DEFINITIONS = [
   },
 ];
 
+const SIGNATURE_STEP_INDEX = 8;
+
 const state = {
   currentStep: 0,
+  signMode: false,
+  signModeId: '',
   selectedTemplateFile: null,
   selectedTemplateName: '',
   selectedTemplateSource: 'auto',
@@ -528,6 +532,8 @@ const elements = {
   btnCaricaFirma: document.getElementById('btnCaricaFirma'),
   btnPulisciFirma: document.getElementById('btnPulisciFirma'),
   btnInserisciFirma: document.getElementById('btnInserisciFirma'),
+  btnConfirmSignerSignature: document.getElementById('btnConfirmSignerSignature'),
+  btnShareSignatureWhatsApp: document.getElementById('btnShareSignatureWhatsApp'),
   btnOpenSignaturePad: document.getElementById('btnOpenSignaturePad'),
   btnClearSignaturePadModal: document.getElementById('btnClearSignaturePadModal'),
   btnApplySignaturePadModal: document.getElementById('btnApplySignaturePadModal'),
@@ -598,6 +604,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   setDefaultDates();
   updateDocumentUploadsMeta();
   toggleCriminalFields();
+
+  const signId = new URLSearchParams(window.location.search).get('sign');
+  if (signId) {
+    await startSignatureLinkMode(signId);
+    setupFooterOffsetSync();
+    return;
+  }
+
   loadFromLocalStorage({ silent: true, notifyIfMissing: false });
   refreshUi();
   setupFooterOffsetSync();
@@ -629,6 +643,12 @@ function bindEvents() {
   elements.signatureUpload.addEventListener('change', handleSignatureUpload);
   elements.btnPulisciFirma.addEventListener('click', clearSignatureCanvas);
   elements.btnInserisciFirma.addEventListener('click', captureSignature);
+  elements.btnConfirmSignerSignature?.addEventListener('click', () => {
+    void confirmSignerSignature();
+  });
+  elements.btnShareSignatureWhatsApp?.addEventListener('click', () => {
+    void shareSignatureLinkViaWhatsApp();
+  });
   elements.btnOpenSignaturePad?.addEventListener('click', () => {
     void openExpandedSignaturePad();
   });
@@ -1850,6 +1870,9 @@ function getSelectedContractUiConfig() {
 }
 
 function getActiveStepIndices() {
+  if (state.signMode) {
+    return [SIGNATURE_STEP_INDEX];
+  }
   const uiConfig = getSelectedContractUiConfig();
   if (uiConfig.activeSteps?.length) {
     return [...uiConfig.activeSteps];
@@ -3797,6 +3820,105 @@ async function updateCurrentContractInCloud() {
   } catch (error) {
     elements.contractSaveStatus.textContent = error.message || 'Errore aggiornamento.';
     setStatus(elements.contractSaveStatus.textContent, 'danger');
+  }
+}
+
+function buildSignatureShareUrl(contractId) {
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('sign', contractId);
+  return url.toString();
+}
+
+async function shareSignatureLinkViaWhatsApp() {
+  if (state.signMode) {
+    return;
+  }
+  try {
+    setStatus('Preparazione link firma...', 'secondary');
+    const name = state.currentContractName || buildDefaultContractName();
+    const id = state.currentContractId || generateId();
+    const row = await upsertContractToCloud({ id, name, payload: buildContractPayload() });
+    state.currentContractId = row.id;
+    state.currentContractName = row.name;
+    elements.btnContractSaveUpdate.disabled = false;
+
+    const signUrl = buildSignatureShareUrl(row.id);
+    const message = `Firma del contratto "${row.name}": ${signUrl}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
+    setStatus('Link firma aperto in WhatsApp.', 'success');
+  } catch (error) {
+    setStatus(error.message || 'Errore preparazione link firma.', 'danger');
+  }
+}
+
+async function startSignatureLinkMode(id) {
+  const normalizedId = sanitizeText(id);
+  if (!normalizedId) {
+    return;
+  }
+
+  state.signMode = true;
+  state.signModeId = normalizedId;
+  document.body.classList.add('sign-mode');
+
+  try {
+    const response = await fetch(`/api/contracts/${encodeURIComponent(normalizedId)}`);
+    if (!response.ok) {
+      const body = await safeJson(response);
+      throw new Error(body?.error || 'Contratto non trovato.');
+    }
+    const row = await response.json();
+    applyContractPayload(row);
+
+    state.signMode = true;
+    state.currentStep = SIGNATURE_STEP_INDEX;
+    elements.btnConfirmSignerSignature?.classList.remove('d-none');
+    elements.btnInserisciFirma?.classList.add('d-none');
+    const label = sanitizeText(row?.name);
+    elements.signatureInfo.textContent = label
+      ? `Firma richiesta per: ${label}. Disegna la firma e conferma.`
+      : 'Disegna la firma e conferma.';
+    refreshUi();
+    setStatus('Firma il contratto e premi "Conferma firma".', 'secondary');
+  } catch (error) {
+    elements.signatureInfo.textContent = error.message || 'Errore caricamento contratto.';
+    refreshUi();
+    setStatus(error.message || 'Errore caricamento contratto per la firma.', 'danger');
+  }
+}
+
+async function confirmSignerSignature() {
+  if (isCanvasBlank(elements.signatureCanvas)) {
+    elements.signatureError.textContent = 'Disegna prima una firma valida.';
+    setStatus('Disegna prima una firma sul canvas.', 'warning');
+    return;
+  }
+
+  persistSignatureFromMainCanvas({ successMessage: 'Firma confermata.' });
+
+  if (!state.signModeId) {
+    return;
+  }
+
+  try {
+    elements.signatureInfo.textContent = 'Invio della firma in corso...';
+    const row = await upsertContractToCloud({
+      id: state.signModeId,
+      name: state.currentContractName || state.signModeId,
+      payload: buildContractPayload(),
+    });
+    state.currentContractName = row.name;
+    elements.signatureError.textContent = '';
+    elements.signatureInfo.textContent = 'Firma inviata correttamente. Grazie!';
+    setStatus('Firma inviata correttamente.', 'success');
+    if (elements.btnConfirmSignerSignature) {
+      elements.btnConfirmSignerSignature.disabled = true;
+    }
+  } catch (error) {
+    elements.signatureInfo.textContent = error.message || 'Errore invio firma.';
+    setStatus(elements.signatureInfo.textContent, 'danger');
   }
 }
 

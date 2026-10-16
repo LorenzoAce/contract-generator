@@ -1203,6 +1203,17 @@ textarea.form-control {
   min-height: auto;
 }
 
+body.sign-mode .app-header,
+body.sign-mode .sidebar-stack,
+body.sign-mode .wizard-footer,
+body.sign-mode .app-footer {
+  display: none !important;
+}
+
+body.sign-mode .row {
+  justify-content: center;
+}
+
 @media (max-width: 1399.98px) {
   .wizard-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));

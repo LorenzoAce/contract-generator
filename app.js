@@ -479,6 +479,7 @@ const state = {
   importedContractDraft: null,
   importedContractPdfUrl: '',
   pendingStepTarget: null,
+  acknowledgedSteps: new Set(),
 };
 
 const elements = {
@@ -2926,6 +2927,7 @@ function handleNewForm() {
   clearSignatureCanvas({ silent: true });
   toggleCriminalFields();
   resetGeneratedPdf();
+  state.acknowledgedSteps.clear();
   state.currentStep = 0;
   refreshUi();
   saveToLocalStorage({ silent: true });
@@ -4253,6 +4255,7 @@ function proceedToPendingStep() {
   if (targetStep === null || targetStep === undefined) {
     return;
   }
+  state.acknowledgedSteps.add(state.currentStep);
   goToStep(targetStep, { validateCurrent: true, force: true });
 }
 
@@ -4324,7 +4327,9 @@ function updateStepperStatus() {
   const buttons = elements.stepperNav.querySelectorAll('[data-target-step]');
   buttons.forEach((button) => {
     const targetStep = Number(button.dataset.targetStep);
-    const ok = validateStep(targetStep, { silent: true }) || stepHasAnyValue(targetStep);
+    const ok = validateStep(targetStep, { silent: true })
+      || stepHasAnyValue(targetStep)
+      || state.acknowledgedSteps.has(targetStep);
     const status = button.querySelector('.step-nav__status');
     button.classList.toggle('is-current', targetStep === state.currentStep);
     button.classList.toggle('is-complete', ok);

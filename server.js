@@ -60,22 +60,22 @@ app.get('/api/health', async (_req, res) => {
   }
 });
 
-app.get('/api/auth/bootstrap-status', async (_req, res) => {
+async function handleBootstrapStatus(_req, res) {
   try {
     res.json(await getBootstrapStatus());
   } catch (error) {
     res.status(500).json({ error: error.message || 'Errore bootstrap status' });
   }
-});
+}
 
-app.get('/api/auth/config', async (_req, res) => {
+function handleAuthConfig(_req, res) {
   res.json({
     configured: Boolean(getAuthBaseUrl()),
     baseUrl: getAuthBaseUrl(),
   });
-});
+}
 
-app.get('/api/auth/me', async (req, res) => {
+async function handleAuthMe(req, res) {
   try {
     const user = await resolveRequestUser(req);
     if (!user) {
@@ -87,7 +87,16 @@ app.get('/api/auth/me', async (req, res) => {
     const statusCode = String(error?.message || '').includes('Neon Auth non configurato') ? 503 : 401;
     res.status(statusCode).json({ error: error.message || 'Errore sessione' });
   }
-});
+}
+
+app.get('/api/auth/bootstrap-status', handleBootstrapStatus);
+app.get('/api/bootstrap-status', handleBootstrapStatus);
+
+app.get('/api/auth/config', handleAuthConfig);
+app.get('/api/auth-config', handleAuthConfig);
+
+app.get('/api/auth/me', handleAuthMe);
+app.get('/api/me', handleAuthMe);
 
 app.get('/api/users', async (req, res) => {
   const user = await requireAdmin(req, res);

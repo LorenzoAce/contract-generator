@@ -693,17 +693,15 @@ function renderAppVersion() {
 
 async function initializeAuthentication() {
   try {
-    const authConfigResponse = await fetch('/api/auth/config');
-    if (!authConfigResponse.ok) {
-      throw new Error('Impossibile leggere la configurazione Neon Auth.');
-    }
-    state.neonAuthConfig = await authConfigResponse.json();
+    state.neonAuthConfig = await fetchJsonWithFallback(
+      ['/api/auth/config', '/api/auth-config'],
+      'Impossibile leggere la configurazione Neon Auth.',
+    );
 
-    const bootstrapStatus = await fetch('/api/auth/bootstrap-status');
-    if (!bootstrapStatus.ok) {
-      throw new Error('Impossibile verificare lo stato iniziale dell\'accesso.');
-    }
-    const bootstrapData = await bootstrapStatus.json();
+    const bootstrapData = await fetchJsonWithFallback(
+      ['/api/auth/bootstrap-status', '/api/bootstrap-status'],
+      'Impossibile verificare lo stato iniziale dell\'accesso.',
+    );
     state.bootstrapInitialized = Boolean(bootstrapData.initialized);
 
     if (!state.neonAuthConfig?.configured || !state.neonAuthConfig?.baseUrl) {
@@ -892,12 +890,10 @@ function parseNeonAuthError(result, fallbackMessage) {
 }
 
 async function refreshCurrentUser() {
-  const response = await authenticatedFetch('/api/auth/me');
-  if (!response.ok) {
-    const body = await safeJson(response);
-    throw new Error(body?.error || 'Sessione non disponibile.');
-  }
-  const data = await response.json();
+  const data = await fetchAuthenticatedJsonWithFallback(
+    ['/api/auth/me', '/api/me'],
+    'Sessione non disponibile.',
+  );
   state.currentUser = data.user || null;
   return state.currentUser;
 }
@@ -4156,6 +4152,50 @@ async function safeJson(response) {
   } catch (error) {
     return null;
   }
+}
+
+async function fetchJsonWithFallback(urls, defaultMessage) {
+  let lastErrorMessage = defaultMessage;
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url);
+      const body = await safeJson(response);
+      if (response.ok) {
+        return body;
+      }
+      lastErrorMessage = body?.error || defaultMessage;
+      if (response.status !== 404) {
+        throw new Error(lastErrorMessage);
+      }
+    } catch (error) {
+      lastErrorMessage = error?.message || lastErrorMessage;
+    }
+  }
+
+  throw new Error(lastErrorMessage);
+}
+
+async function fetchAuthenticatedJsonWithFallback(urls, defaultMessage) {
+  let lastErrorMessage = defaultMessage;
+
+  for (const url of urls) {
+    try {
+      const response = await authenticatedFetch(url);
+      const body = await safeJson(response);
+      if (response.ok) {
+        return body;
+      }
+      lastErrorMessage = body?.error || defaultMessage;
+      if (response.status !== 404) {
+        throw new Error(lastErrorMessage);
+      }
+    } catch (error) {
+      lastErrorMessage = error?.message || lastErrorMessage;
+    }
+  }
+
+  throw new Error(lastErrorMessage);
 }
 
 async function openMappingModal() {

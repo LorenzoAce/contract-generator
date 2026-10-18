@@ -1,11 +1,16 @@
 const { deleteContract, getContract, saveContract } = require('../../lib/template-mapping-service');
+const { requireAuth } = require('../../lib/request-auth');
 
 module.exports = async function handler(req, res) {
   const id = req.query.id;
 
   if (req.method === 'GET') {
+    const user = await requireAuth(req, res);
+    if (!user) {
+      return;
+    }
     try {
-      const row = await getContract({ id });
+      const row = await getContract({ id, ownerUserId: user.id, isAdmin: user.is_admin });
       if (!row) {
         res.status(404).json({ error: 'Contratto non trovato' });
         return;
@@ -18,13 +23,23 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'PUT') {
+    const user = await requireAuth(req, res);
+    if (!user) {
+      return;
+    }
     try {
       const body = await getJsonBody(req);
+      const existing = await getContract({ id, ownerUserId: user.id, isAdmin: user.is_admin });
+      if (!existing) {
+        res.status(404).json({ error: 'Contratto non trovato' });
+        return;
+      }
       const row = await saveContract({
         id,
         contractType: body.contractType,
         name: body.name,
         payload: body.payload,
+        ownerUserId: existing.owner_user_id || user.id,
       });
       res.status(200).json(row);
     } catch (error) {
@@ -34,7 +49,16 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
+    const user = await requireAuth(req, res);
+    if (!user) {
+      return;
+    }
     try {
+      const existing = await getContract({ id, ownerUserId: user.id, isAdmin: user.is_admin });
+      if (!existing) {
+        res.status(404).json({ error: 'Contratto non trovato' });
+        return;
+      }
       await deleteContract({ id });
       res.status(204).end();
     } catch (error) {
@@ -75,4 +99,3 @@ async function getJsonBody(req) {
   const raw = Buffer.concat(chunks).toString('utf8').trim();
   return raw ? JSON.parse(raw) : {};
 }
-

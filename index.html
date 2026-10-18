@@ -10,14 +10,75 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body class="app-shell">
-  <div class="container-fluid px-3 px-lg-4 py-4">
+  <div class="auth-gate" id="authGate">
+    <div class="auth-gate__card shadow-lg">
+      <div class="auth-gate__brand">
+        <img src="./assets/logos/contract-generator-logo.png" alt="" class="auth-gate__logo">
+        <div>
+          <h1 class="h3 mb-1">Accesso riservato</h1>
+          <p class="text-secondary mb-0">Accedi per visualizzare solo i tuoi contratti oppure configura l'account admin iniziale.</p>
+        </div>
+      </div>
+      <div class="alert alert-danger d-none" id="authErrorBox" role="alert"></div>
+
+      <section id="bootstrapPanel" class="auth-panel d-none">
+        <div class="eyebrow text-dark mb-2">Primo avvio</div>
+        <h2 class="h5 mb-2">Crea l'account admin</h2>
+        <p class="text-secondary small mb-3">Questo account riceverà anche i contratti già presenti nel database.</p>
+        <div class="row g-3">
+          <div class="col-12">
+            <label for="bootstrapFullName" class="form-label required">Nome completo</label>
+            <input type="text" class="form-control" id="bootstrapFullName" autocomplete="name">
+          </div>
+          <div class="col-12">
+            <label for="bootstrapEmail" class="form-label required">Email</label>
+            <input type="email" class="form-control" id="bootstrapEmail" autocomplete="username">
+          </div>
+          <div class="col-12">
+            <label for="bootstrapPassword" class="form-label required">Password</label>
+            <input type="password" class="form-control" id="bootstrapPassword" autocomplete="new-password">
+          </div>
+        </div>
+        <div class="d-grid mt-3">
+          <button type="button" class="btn btn-primary" id="btnBootstrapAdmin">Crea admin e accedi</button>
+        </div>
+      </section>
+
+      <section id="loginPanel" class="auth-panel d-none">
+        <div class="eyebrow text-dark mb-2">Login</div>
+        <h2 class="h5 mb-2">Accedi</h2>
+        <div class="row g-3">
+          <div class="col-12">
+            <label for="loginEmail" class="form-label required">Email</label>
+            <input type="email" class="form-control" id="loginEmail" autocomplete="username">
+          </div>
+          <div class="col-12">
+            <label for="loginPassword" class="form-label required">Password</label>
+            <input type="password" class="form-control" id="loginPassword" autocomplete="current-password">
+          </div>
+        </div>
+        <div class="d-grid mt-3">
+          <button type="button" class="btn btn-primary" id="btnLogin">Accedi</button>
+        </div>
+        <p class="text-secondary small mt-3 mb-0">Gli account vengono creati solo dall'admin. Qui puoi soltanto accedere con credenziali gia assegnate.</p>
+      </section>
+    </div>
+  </div>
+
+  <div class="container-fluid px-3 px-lg-4 py-4 d-none" id="appShellContent">
     <div class="hero-card hero-card--compact shadow-sm mb-4 app-header">
       <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
         <div class="brand-block">
           <img src="./assets/logos/contract-generator-logo.png" alt="" class="brand-mark">
           <div class="brand-copy">
-            <h1 class="display-title mb-1">Contract Generator <span class="app-version" id="appVersion">1.54</span></h1>
+            <div class="brand-title-row mb-1">
+              <h1 class="display-title mb-0">Contract Generator <span class="app-version" id="appVersion">1.56</span></h1>
+            </div>
             <p class="hero-copy mb-0">Compilazione guidata del contratto e degli allegati in pochi passaggi.</p>
+          </div>
+          <div class="session-pill d-none" id="sessionPill">
+            <div class="session-pill__meta" id="sessionUserRole">user</div>
+            <div class="session-pill__name" id="sessionUserName">Utente</div>
           </div>
         </div>
         <div class="hero-toolbar hero-toolbar--compact">
@@ -38,24 +99,38 @@
               <option value="pvr-vincitu" selected>PVR Vincitu</option>
             </select>
           </div>
-          <div class="dropdown header-menu">
-            <button class="btn btn-outline-light header-menu__trigger dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+          <div class="header-actions">
+            <div class="dropdown header-menu">
+              <button class="btn btn-outline-light header-menu__trigger dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <span class="btn-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M4.75 6.75h14.5M4.75 12h14.5M4.75 17.25h14.5"></path>
+                  </svg>
+                </span>
+                <span>Menu</span>
+              </button>
+              <div class="dropdown-menu dropdown-menu-end header-menu__list">
+                <button type="button" class="dropdown-item" id="btnNuovo">Reset</button>
+                <button type="button" class="dropdown-item" id="btnSalva">Salva</button>
+                <button type="button" class="dropdown-item" id="btnCarica">Carica</button>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-header">Contratti Importati</div>
+                <button type="button" class="dropdown-item" id="btnImportContractPdf" data-bs-toggle="modal" data-bs-target="#importContractModal">Importa Contratto PDF</button>
+                <button type="button" class="dropdown-item" id="btnManageImportedContracts">Gestisci Contratti Importati</button>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-header">Admin</div>
+                <button type="button" class="dropdown-item d-none" id="btnOpenUserAdmin" data-bs-toggle="modal" data-bs-target="#userAdminModal">Gestione Utenti</button>
+              </div>
+            </div>
+            <button type="button" class="btn header-menu__trigger header-logout-btn" id="btnLogout" aria-label="Logout" title="Logout">
               <span class="btn-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" focusable="false">
-                  <path d="M4.75 6.75h14.5M4.75 12h14.5M4.75 17.25h14.5"></path>
+                  <path d="M14 5.75H8.75a2 2 0 0 0-2 2v8.5a2 2 0 0 0 2 2H14"></path>
+                  <path d="M12.25 12h8"></path>
+                  <path d="M17.25 8.5 20.75 12l-3.5 3.5"></path>
                 </svg>
               </span>
-              <span>Menu</span>
             </button>
-            <div class="dropdown-menu dropdown-menu-end header-menu__list">
-              <button type="button" class="dropdown-item" id="btnNuovo">Reset</button>
-              <button type="button" class="dropdown-item" id="btnSalva">Salva</button>
-              <button type="button" class="dropdown-item" id="btnCarica">Carica</button>
-              <div class="dropdown-divider"></div>
-              <div class="dropdown-header">Contratti Importati</div>
-              <button type="button" class="dropdown-item" id="btnImportContractPdf" data-bs-toggle="modal" data-bs-target="#importContractModal">Importa Contratto PDF</button>
-              <button type="button" class="dropdown-item" id="btnManageImportedContracts">Gestisci Contratti Importati</button>
-            </div>
           </div>
         </div>
       </div>
@@ -972,6 +1047,96 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Resta qui</button>
           <button type="button" class="btn btn-primary" id="btnStepIncompleteConfirm">OK, prosegui</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="userAdminModal" tabindex="-1" aria-labelledby="userAdminModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header border-0 pb-0">
+          <div>
+            <div class="eyebrow text-dark mb-2">Admin</div>
+            <h2 class="h4 mb-1" id="userAdminModalLabel">Gestione utenti</h2>
+            <p class="text-secondary mb-0">Crea nuovi utenti e controlla chi può accedere ai contratti.</p>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+        </div>
+        <div class="modal-body pt-3">
+          <div class="surface-panel mb-3">
+            <div class="d-flex flex-column flex-lg-row gap-3 align-items-lg-start">
+              <div class="flex-grow-1">
+                <h3 class="h6 mb-2">Nuovo utente</h3>
+                <div class="row g-3">
+                  <div class="col-12 col-md-6">
+                    <label for="adminCreateFullName" class="form-label required">Nome completo</label>
+                    <input type="text" class="form-control" id="adminCreateFullName" autocomplete="name">
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label for="adminCreateEmail" class="form-label required">Email</label>
+                    <input type="email" class="form-control" id="adminCreateEmail" autocomplete="off">
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label for="adminCreatePassword" class="form-label required">Password iniziale</label>
+                    <input type="password" class="form-control" id="adminCreatePassword" autocomplete="new-password">
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label for="adminCreateRole" class="form-label required">Ruolo</label>
+                    <select class="form-select" id="adminCreateRole">
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="d-flex justify-content-end mt-3">
+                  <button type="button" class="btn btn-primary" id="btnAdminCreateUser">Crea utente</button>
+                </div>
+              </div>
+              <div class="surface-panel surface-panel--muted admin-user-edit d-none" id="adminEditPanel">
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                  <div>
+                    <h3 class="h6 mb-1">Modifica utente</h3>
+                    <div class="small text-secondary" id="adminEditEmail">Seleziona un utente dalla lista.</div>
+                  </div>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="btnAdminCancelEdit">Annulla</button>
+                </div>
+                <div class="row g-3">
+                  <div class="col-12">
+                    <label for="adminEditFullName" class="form-label required">Nome completo</label>
+                    <input type="text" class="form-control" id="adminEditFullName" autocomplete="name">
+                  </div>
+                  <div class="col-12">
+                    <label for="adminEditPassword" class="form-label">Nuova password</label>
+                    <input type="password" class="form-control" id="adminEditPassword" autocomplete="new-password" placeholder="Lascia vuoto per non cambiarla">
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label for="adminEditRole" class="form-label required">Ruolo</label>
+                    <select class="form-select" id="adminEditRole">
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                  <div class="col-12 col-md-6 d-flex align-items-end">
+                    <div class="form-check form-switch mb-2">
+                      <input class="form-check-input" type="checkbox" role="switch" id="adminEditIsActive" checked>
+                      <label class="form-check-label" for="adminEditIsActive">Utente attivo</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="d-flex justify-content-end mt-3">
+                  <button type="button" class="btn btn-primary" id="btnAdminSaveUser">Salva modifiche</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="surface-panel mb-3">
+            <div class="small text-secondary" id="adminUsersStatus">Pronto.</div>
+          </div>
+          <div class="list-group" id="adminUsersList"></div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Chiudi</button>
         </div>
       </div>
     </div>

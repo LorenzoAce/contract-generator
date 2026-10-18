@@ -22,6 +22,93 @@ body.app-shell {
   overflow-x: clip;
 }
 
+.auth-gate {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.auth-gate.d-none {
+  display: none !important;
+}
+
+.auth-gate__card {
+  width: min(100%, 34rem);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--card-border);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+}
+
+.auth-gate__brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.auth-gate__logo {
+  width: 3.5rem;
+  height: 3.5rem;
+  object-fit: contain;
+}
+
+.auth-panel + .auth-panel {
+  margin-top: 1.5rem;
+}
+
+.admin-user-edit {
+  width: min(100%, 24rem);
+  flex: 0 0 min(100%, 24rem);
+}
+
+.admin-user-row {
+  border-radius: 1rem;
+}
+
+.session-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  max-width: 18rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 1.1rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(10px);
+  color: #fff;
+}
+
+.session-pill__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.session-pill__meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.45rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 .app-footer {
   position: fixed;
   left: 0;
@@ -116,6 +203,13 @@ body.app-shell {
     display: block !important;
     height: auto !important;
     visibility: visible !important;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .admin-user-edit {
+    width: 100%;
+    flex-basis: 100%;
   }
 }
 
@@ -259,6 +353,7 @@ body.app-shell {
 
 .brand-block {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 1rem;
   min-width: 0;
@@ -274,6 +369,19 @@ body.app-shell {
 }
 
 .brand-copy {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.brand-block .session-pill {
+  flex: 0 0 auto;
+}
+
+.brand-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
   min-width: 0;
 }
 
@@ -321,6 +429,14 @@ body.app-shell {
 
 .hero-toolbar--compact {
   justify-content: flex-end;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  min-width: 0;
 }
 
 .contract-picker {
@@ -389,7 +505,7 @@ body.app-shell {
     justify-self: center;
   }
 
-  .hero-toolbar--compact .header-menu {
+  .hero-toolbar--compact .header-actions {
     grid-column: 3;
     justify-self: end;
   }
@@ -427,6 +543,22 @@ body.app-shell {
 .header-menu__trigger.show {
   background: rgba(255, 255, 255, 0.16);
   border-color: rgba(255, 255, 255, 0.62);
+}
+
+.header-logout-btn {
+  width: 2.35rem;
+  min-width: 2.35rem;
+  padding-inline: 0;
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(127, 29, 29, 0.18);
+}
+
+.header-logout-btn:hover,
+.header-logout-btn:focus {
+  color: #fecaca;
+  background: rgba(220, 38, 38, 0.28);
+  border-color: rgba(248, 113, 113, 0.68);
 }
 
 .header-menu__list {
@@ -1377,8 +1509,10 @@ body.sign-mode .row {
   }
 
   .contract-picker,
+  .header-actions,
   .header-menu,
-  .header-menu__trigger {
+  .header-menu__trigger,
+  .header-logout-btn {
     width: 100%;
   }
 

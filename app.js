@@ -1,7 +1,8 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.54';
+const APP_VERSION = '1.56';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
+const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
 const COMUNI_DATASET_URL = 'https://raw.githubusercontent.com/matteocontrini/comuni-json/master/comuni.json';
 const COMUNI_CACHE_KEY = 'contract-generator-comuni-cache-v1';
@@ -454,6 +455,12 @@ const state = {
   currentStep: 0,
   signMode: false,
   signModeId: '',
+  currentUser: null,
+  adminEditingUserId: '',
+  adminUsersCache: [],
+  bootstrapInitialized: true,
+  neonAuthConfig: null,
+  neonAuthClient: null,
   selectedTemplateFile: null,
   selectedTemplateName: '',
   selectedTemplateSource: 'auto',
@@ -484,6 +491,22 @@ const state = {
 
 const elements = {
   appVersion: document.getElementById('appVersion'),
+  authGate: document.getElementById('authGate'),
+  appShellContent: document.getElementById('appShellContent'),
+  authErrorBox: document.getElementById('authErrorBox'),
+  bootstrapPanel: document.getElementById('bootstrapPanel'),
+  bootstrapFullName: document.getElementById('bootstrapFullName'),
+  bootstrapEmail: document.getElementById('bootstrapEmail'),
+  bootstrapPassword: document.getElementById('bootstrapPassword'),
+  btnBootstrapAdmin: document.getElementById('btnBootstrapAdmin'),
+  loginPanel: document.getElementById('loginPanel'),
+  loginEmail: document.getElementById('loginEmail'),
+  loginPassword: document.getElementById('loginPassword'),
+  btnLogin: document.getElementById('btnLogin'),
+  btnLogout: document.getElementById('btnLogout'),
+  sessionPill: document.getElementById('sessionPill'),
+  sessionUserName: document.getElementById('sessionUserName'),
+  sessionUserRole: document.getElementById('sessionUserRole'),
   form: document.getElementById('contractForm'),
   contractType: document.getElementById('contractType'),
   contractTypeMenu: document.getElementById('contractTypeMenu'),
@@ -603,6 +626,23 @@ const elements = {
   importedContractsManagerList: document.getElementById('importedContractsManagerList'),
   importedContractsManagerStatus: document.getElementById('importedContractsManagerStatus'),
   btnRefreshImportedContractsManager: document.getElementById('btnRefreshImportedContractsManager'),
+  btnOpenUserAdmin: document.getElementById('btnOpenUserAdmin'),
+  userAdminModal: document.getElementById('userAdminModal'),
+  adminUsersList: document.getElementById('adminUsersList'),
+  adminUsersStatus: document.getElementById('adminUsersStatus'),
+  adminCreateFullName: document.getElementById('adminCreateFullName'),
+  adminCreateEmail: document.getElementById('adminCreateEmail'),
+  adminCreatePassword: document.getElementById('adminCreatePassword'),
+  adminCreateRole: document.getElementById('adminCreateRole'),
+  btnAdminCreateUser: document.getElementById('btnAdminCreateUser'),
+  adminEditPanel: document.getElementById('adminEditPanel'),
+  adminEditEmail: document.getElementById('adminEditEmail'),
+  adminEditFullName: document.getElementById('adminEditFullName'),
+  adminEditPassword: document.getElementById('adminEditPassword'),
+  adminEditRole: document.getElementById('adminEditRole'),
+  adminEditIsActive: document.getElementById('adminEditIsActive'),
+  btnAdminSaveUser: document.getElementById('btnAdminSaveUser'),
+  btnAdminCancelEdit: document.getElementById('btnAdminCancelEdit'),
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -633,6 +673,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  const authenticated = await initializeAuthentication();
+  if (!authenticated) {
+    return;
+  }
+
   loadFromLocalStorage({ silent: true, notifyIfMissing: false });
   refreshUi();
   setupFooterOffsetSync();
@@ -646,10 +691,635 @@ function renderAppVersion() {
   document.title = `Contract Generator ${APP_VERSION}`;
 }
 
+async function initializeAuthentication() {
+  try {
+    const authConfigResponse = await fetch('/api/auth/config');
+    if (!authConfigResponse.ok) {
+      throw new Error('Impossibile leggere la configurazione Neon Auth.');
+    }
+    state.neonAuthConfig = await authConfigResponse.json();
+
+    const bootstrapStatus = await fetch('/api/auth/bootstrap-status');
+    if (!bootstrapStatus.ok) {
+      throw new Error('Impossibile verificare lo stato iniziale dell\'accesso.');
+    }
+    const bootstrapData = await bootstrapStatus.json();
+    state.bootstrapInitialized = Boolean(bootstrapData.initialized);
+
+    if (!state.neonAuthConfig?.configured || !state.neonAuthConfig?.baseUrl) {
+      showAuthError('Neon Better Auth non è configurato. Aggiungi NEON_AUTH_BASE_URL nel file .env.local.');
+      showAuthScreen({ bootstrapMode: !state.bootstrapInitialized });
+      return false;
+    }
+
+    if (state.bootstrapInitialized) {
+      try {
+        await refreshCurrentUser();
+        showAuthenticatedApp();
+        return true;
+      } catch (_error) {
+        showAuthScreen({ bootstrapMode: false });
+        return false;
+      }
+    }
+
+    showAuthScreen({ bootstrapMode: true });
+    return false;
+  } catch (error) {
+    showAuthError(error.message || 'Errore inizializzazione accesso.');
+    showAuthScreen({ bootstrapMode: false });
+    return false;
+  }
+}
+
+function showAuthScreen({ bootstrapMode }) {
+  elements.authGate?.classList.remove('d-none');
+  elements.appShellContent?.classList.add('d-none');
+  elements.bootstrapPanel?.classList.toggle('d-none', !bootstrapMode);
+  elements.loginPanel?.classList.toggle('d-none', Boolean(bootstrapMode));
+  if (bootstrapMode) {
+    elements.bootstrapFullName?.focus();
+  } else {
+    elements.loginEmail?.focus();
+  }
+}
+
+function showAuthenticatedApp() {
+  elements.authGate?.classList.add('d-none');
+  elements.appShellContent?.classList.remove('d-none');
+  resetAuthForms();
+  syncCurrentUserUi();
+}
+
+function resetAuthForms() {
+  if (elements.bootstrapFullName) {
+    elements.bootstrapFullName.value = '';
+  }
+  if (elements.bootstrapEmail) {
+    elements.bootstrapEmail.value = '';
+  }
+  if (elements.bootstrapPassword) {
+    elements.bootstrapPassword.value = '';
+  }
+  if (elements.loginEmail) {
+    elements.loginEmail.value = '';
+  }
+  if (elements.loginPassword) {
+    elements.loginPassword.value = '';
+  }
+}
+
+function showAuthError(message) {
+  if (!elements.authErrorBox) {
+    return;
+  }
+  const normalizedMessage = sanitizeText(message);
+  elements.authErrorBox.textContent = normalizedMessage || 'Errore accesso.';
+  elements.authErrorBox.classList.toggle('d-none', !normalizedMessage);
+}
+
+async function getNeonAuthClient() {
+  if (state.neonAuthClient) {
+    return state.neonAuthClient;
+  }
+  const authBaseUrl = sanitizeText(state.neonAuthConfig?.baseUrl);
+  if (!authBaseUrl) {
+    throw new Error('NEON_AUTH_BASE_URL non configurato.');
+  }
+  const module = await import(NEON_AUTH_MODULE_URL);
+  if (typeof module.createInternalNeonAuth === 'function') {
+    state.neonAuthClient = module.createInternalNeonAuth(authBaseUrl);
+    return state.neonAuthClient;
+  }
+  const adapter = module.createAuthClient(authBaseUrl);
+  state.neonAuthClient = {
+    adapter,
+    getJWTToken: async () => {
+      const sessionResult = typeof adapter.getSession === 'function'
+        ? await adapter.getSession()
+        : null;
+      return sanitizeText(sessionResult?.data?.session?.token);
+    },
+  };
+  return state.neonAuthClient;
+}
+
+async function getNeonAccessToken() {
+  if (!state.neonAuthConfig?.configured) {
+    return '';
+  }
+  try {
+    const authClient = await getNeonAuthClient();
+    const token = typeof authClient.getJWTToken === 'function'
+      ? await authClient.getJWTToken()
+      : '';
+    return sanitizeText(token);
+  } catch (_error) {
+    return '';
+  }
+}
+
+async function authenticatedFetch(resource, options = {}) {
+  const headers = new Headers(options.headers || {});
+  const token = await getNeonAccessToken();
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return fetch(resource, { ...options, headers });
+}
+
+async function callNeonAdminEndpoint(endpointPath, options = {}) {
+  const authBaseUrl = sanitizeText(state.neonAuthConfig?.baseUrl);
+  if (!authBaseUrl) {
+    throw new Error('Neon Better Auth non configurato.');
+  }
+
+  const headers = new Headers(options.headers || {});
+  if (!headers.has('Content-Type') && options.body) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const response = await fetch(`${authBaseUrl.replace(/\/+$/, '')}${endpointPath}`, {
+    method: options.method || 'GET',
+    headers,
+    body: options.body,
+    credentials: 'include',
+  });
+  const body = await safeJson(response);
+  if (!response.ok) {
+    throw new Error(body?.message || body?.error || `Errore Neon Better Auth (${response.status}).`);
+  }
+  return body;
+}
+
+function countActiveAdmins(items = []) {
+  return items.filter((item) => sanitizeText(item.role) === 'admin' && Boolean(item.is_active)).length;
+}
+
+function validateAdminUserConstraints({ targetUser, nextRole, nextIsActive, action }) {
+  if (!targetUser) {
+    throw new Error('Utente non trovato.');
+  }
+
+  const normalizedTargetId = sanitizeText(targetUser.id);
+  const normalizedCurrentUserId = sanitizeText(state.currentUser?.id);
+  const activeAdmins = countActiveAdmins(state.adminUsersCache);
+  const targetIsActiveAdmin = sanitizeText(targetUser.role) === 'admin' && Boolean(targetUser.is_active);
+  const nextIsAdmin = sanitizeText(nextRole) === 'admin';
+  const willRemainActiveAdmin = nextIsAdmin && Boolean(nextIsActive);
+
+  if (action === 'delete' && normalizedTargetId === normalizedCurrentUserId) {
+    throw new Error('Non puoi eliminare il tuo account admin.');
+  }
+
+  if (action === 'update' && normalizedTargetId === normalizedCurrentUserId && !willRemainActiveAdmin) {
+    throw new Error('Non puoi rimuovere i tuoi permessi admin o disattivare il tuo account.');
+  }
+
+  if (targetIsActiveAdmin && activeAdmins <= 1 && !willRemainActiveAdmin) {
+    throw new Error('Deve restare almeno un admin attivo.');
+  }
+}
+
+function parseNeonAuthError(result, fallbackMessage) {
+  const message = sanitizeText(
+    result?.error?.message
+      || result?.error
+      || result?.data?.error?.message
+      || fallbackMessage,
+  );
+  return message || fallbackMessage;
+}
+
+async function refreshCurrentUser() {
+  const response = await authenticatedFetch('/api/auth/me');
+  if (!response.ok) {
+    const body = await safeJson(response);
+    throw new Error(body?.error || 'Sessione non disponibile.');
+  }
+  const data = await response.json();
+  state.currentUser = data.user || null;
+  return state.currentUser;
+}
+
+function syncCurrentUserUi() {
+  const user = state.currentUser;
+  const isAdmin = user?.role === 'admin';
+  if (elements.sessionPill) {
+    elements.sessionPill.classList.toggle('d-none', !user);
+  }
+  if (elements.sessionUserName) {
+    elements.sessionUserName.textContent = sanitizeText(user?.full_name) || 'Utente';
+  }
+  if (elements.sessionUserRole) {
+    elements.sessionUserRole.textContent = isAdmin ? 'ADMIN' : 'USER';
+  }
+  elements.btnOpenUserAdmin?.classList.toggle('d-none', !isAdmin);
+  elements.btnImportContractPdf?.classList.toggle('d-none', !isAdmin);
+  elements.btnManageImportedContracts?.classList.toggle('d-none', !isAdmin);
+  elements.btnSaveTemplateToDb?.classList.toggle('d-none', !isAdmin);
+  elements.btnOpenMapping?.classList.toggle('d-none', !isAdmin);
+}
+
+async function handleBootstrapAdmin() {
+  try {
+    showAuthError('');
+    const fullName = sanitizeText(elements.bootstrapFullName?.value);
+    if (!fullName) {
+      throw new Error('Inserisci il nome completo dell\'admin.');
+    }
+    const authClient = await getNeonAuthClient();
+    const result = await authClient.adapter.signUp.email({
+      name: fullName,
+      email: sanitizeText(elements.bootstrapEmail?.value),
+      password: elements.bootstrapPassword?.value || '',
+    });
+    if (result?.error) {
+      throw new Error(parseNeonAuthError(result, 'Errore creazione account admin.'));
+    }
+    await refreshCurrentUser();
+    showAuthenticatedApp();
+    loadFromLocalStorage({ silent: true, notifyIfMissing: false });
+    refreshUi();
+    setupFooterOffsetSync();
+    void initializeComuneAutocomplete();
+  } catch (error) {
+    showAuthError(error.message || 'Errore creazione admin.');
+  }
+}
+
+async function handleLogin() {
+  try {
+    showAuthError('');
+    const authClient = await getNeonAuthClient();
+    const result = await authClient.adapter.signIn.email({
+      email: sanitizeText(elements.loginEmail?.value),
+      password: elements.loginPassword?.value || '',
+    });
+    if (result?.error) {
+      throw new Error(parseNeonAuthError(result, 'Errore login.'));
+    }
+    await refreshCurrentUser();
+    showAuthenticatedApp();
+    loadFromLocalStorage({ silent: true, notifyIfMissing: false });
+    refreshUi();
+    setupFooterOffsetSync();
+    void initializeComuneAutocomplete();
+  } catch (error) {
+    showAuthError(error.message || 'Errore login.');
+  }
+}
+
+async function handleLogout() {
+  try {
+    const authClient = await getNeonAuthClient();
+    const result = await authClient.adapter.signOut();
+    if (result?.error) {
+      throw new Error(parseNeonAuthError(result, 'Errore logout.'));
+    }
+  } catch (_error) {
+    // Ignore logout transport errors and force local reset.
+  }
+  state.currentUser = null;
+  showAuthError('');
+  showAuthScreen({ bootstrapMode: !state.bootstrapInitialized });
+}
+
+function setAdminUsersStatus(message) {
+  if (elements.adminUsersStatus) {
+    elements.adminUsersStatus.textContent = sanitizeText(message) || 'Pronto.';
+  }
+}
+
+function resetAdminCreateForm() {
+  if (elements.adminCreateFullName) {
+    elements.adminCreateFullName.value = '';
+  }
+  if (elements.adminCreateEmail) {
+    elements.adminCreateEmail.value = '';
+  }
+  if (elements.adminCreatePassword) {
+    elements.adminCreatePassword.value = '';
+  }
+  if (elements.adminCreateRole) {
+    elements.adminCreateRole.value = 'user';
+  }
+}
+
+function clearAdminEditState() {
+  state.adminEditingUserId = '';
+  if (elements.adminEditPanel) {
+    elements.adminEditPanel.classList.add('d-none');
+  }
+  if (elements.adminEditEmail) {
+    elements.adminEditEmail.textContent = 'Seleziona un utente dalla lista.';
+  }
+  if (elements.adminEditFullName) {
+    elements.adminEditFullName.value = '';
+  }
+  if (elements.adminEditPassword) {
+    elements.adminEditPassword.value = '';
+  }
+  if (elements.adminEditRole) {
+    elements.adminEditRole.value = 'user';
+  }
+  if (elements.adminEditIsActive) {
+    elements.adminEditIsActive.checked = true;
+  }
+}
+
+function openAdminEditState(user) {
+  if (!user) {
+    return;
+  }
+  state.adminEditingUserId = sanitizeText(user.id);
+  if (elements.adminEditPanel) {
+    elements.adminEditPanel.classList.remove('d-none');
+  }
+  if (elements.adminEditEmail) {
+    elements.adminEditEmail.textContent = sanitizeText(user.email) || '';
+  }
+  if (elements.adminEditFullName) {
+    elements.adminEditFullName.value = sanitizeText(user.full_name);
+  }
+  if (elements.adminEditPassword) {
+    elements.adminEditPassword.value = '';
+  }
+  if (elements.adminEditRole) {
+    elements.adminEditRole.value = sanitizeText(user.role) === 'admin' ? 'admin' : 'user';
+  }
+  if (elements.adminEditIsActive) {
+    elements.adminEditIsActive.checked = Boolean(user.is_active);
+  }
+}
+
+function renderUsersList(items) {
+  if (!elements.adminUsersList) {
+    return;
+  }
+  if (!items.length) {
+    elements.adminUsersList.innerHTML = '<div class="text-secondary">Nessun utente trovato.</div>';
+    return;
+  }
+
+  elements.adminUsersList.innerHTML = items.map((item) => {
+    const role = sanitizeText(item.role) === 'admin' ? 'admin' : 'user';
+    const roleBadgeClass = role === 'admin' ? 'bg-primary-subtle text-primary-emphasis' : 'bg-light text-secondary';
+    const statusBadgeClass = item.is_active ? 'bg-success-subtle text-success-emphasis' : 'bg-danger-subtle text-danger-emphasis';
+    const isSelf = sanitizeText(item.id) === sanitizeText(state.currentUser?.id);
+    return `
+      <div class="list-group-item admin-user-row">
+        <div class="d-flex flex-column flex-lg-row gap-3 justify-content-between align-items-lg-center">
+          <div class="min-w-0">
+            <div class="fw-semibold">${escapeHtml(item.full_name || 'Senza nome')}</div>
+            <div class="small text-secondary">${escapeHtml(item.email || '')}</div>
+          </div>
+          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-lg-end">
+            <span class="badge rounded-pill ${roleBadgeClass}">${escapeHtml(role.toUpperCase())}</span>
+            <span class="badge rounded-pill ${statusBadgeClass}">${item.is_active ? 'ATTIVO' : 'DISATTIVO'}</span>
+            ${isSelf ? '<span class="badge rounded-pill text-bg-dark">TU</span>' : ''}
+            <button type="button" class="btn btn-sm btn-outline-primary" data-user-action="edit" data-user-id="${escapeHtml(item.id)}">Modifica</button>
+            <button type="button" class="btn btn-sm btn-outline-danger" data-user-action="delete" data-user-id="${escapeHtml(item.id)}">Elimina</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function refreshUsersList() {
+  if (!elements.adminUsersList || !elements.adminUsersStatus || state.currentUser?.role !== 'admin') {
+    return;
+  }
+  try {
+    setAdminUsersStatus('Caricamento utenti...');
+    const response = await authenticatedFetch('/api/users');
+    if (!response.ok) {
+      const body = await safeJson(response);
+      throw new Error(body?.error || 'Errore caricamento utenti.');
+    }
+    const data = await response.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+    state.adminUsersCache = items;
+    renderUsersList(items);
+    setAdminUsersStatus(items.length ? `${items.length} utenti trovati.` : 'Nessun utente registrato.');
+  } catch (error) {
+    setAdminUsersStatus(error.message || 'Errore caricamento utenti.');
+    elements.adminUsersList.innerHTML = '<div class="text-secondary">Impossibile caricare gli utenti.</div>';
+  }
+}
+
+async function handleAdminCreateUser() {
+  try {
+    const fullName = sanitizeText(elements.adminCreateFullName?.value);
+    const email = sanitizeText(elements.adminCreateEmail?.value).toLowerCase();
+    const password = String(elements.adminCreatePassword?.value || '');
+    const role = sanitizeText(elements.adminCreateRole?.value) === 'admin' ? 'admin' : 'user';
+
+    if (!fullName || !email || !password) {
+      throw new Error('Compila nome completo, email e password iniziale.');
+    }
+
+    setAdminUsersStatus('Creazione utente in corso...');
+    const authPayload = await callNeonAdminEndpoint('/admin/create-user', {
+      method: 'POST',
+      body: JSON.stringify({ name: fullName, email, password, role }),
+    });
+
+    const authUser = authPayload?.user || authPayload?.data?.user || authPayload?.data || authPayload;
+    const response = await authenticatedFetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: sanitizeText(authUser?.id),
+        email: sanitizeText(authUser?.email) || email,
+        fullName: sanitizeText(authUser?.name) || fullName,
+        role: sanitizeText(authUser?.role) || role,
+        isActive: !Boolean(authUser?.banned),
+      }),
+    });
+    const body = await safeJson(response);
+    if (!response.ok) {
+      throw new Error(body?.error || 'Errore creazione utente.');
+    }
+
+    resetAdminCreateForm();
+    clearAdminEditState();
+    await refreshUsersList();
+    setAdminUsersStatus(`Utente ${fullName} creato correttamente.`);
+  } catch (error) {
+    setAdminUsersStatus(error.message || 'Errore creazione utente.');
+  }
+}
+
+async function handleAdminSaveUser() {
+  try {
+    const userId = sanitizeText(state.adminEditingUserId);
+    if (!userId) {
+      throw new Error('Seleziona prima un utente da modificare.');
+    }
+
+    const fullName = sanitizeText(elements.adminEditFullName?.value);
+    const password = String(elements.adminEditPassword?.value || '');
+    const role = sanitizeText(elements.adminEditRole?.value) === 'admin' ? 'admin' : 'user';
+    const isActive = Boolean(elements.adminEditIsActive?.checked);
+    const targetUser = state.adminUsersCache.find((item) => sanitizeText(item.id) === userId);
+
+    if (!fullName) {
+      throw new Error('Il nome completo e obbligatorio.');
+    }
+
+    validateAdminUserConstraints({
+      targetUser,
+      nextRole: role,
+      nextIsActive: isActive,
+      action: 'update',
+    });
+
+    setAdminUsersStatus('Salvataggio modifiche in corso...');
+    if (fullName !== sanitizeText(targetUser?.full_name)) {
+      await callNeonAdminEndpoint('/admin/update-user', {
+        method: 'POST',
+        body: JSON.stringify({
+          userId,
+          data: { name: fullName },
+        }),
+      });
+    }
+    if (role !== sanitizeText(targetUser?.role)) {
+      await callNeonAdminEndpoint('/admin/set-role', {
+        method: 'POST',
+        body: JSON.stringify({
+          userId,
+          role,
+        }),
+      });
+    }
+    if (Boolean(isActive) !== Boolean(targetUser?.is_active)) {
+      await callNeonAdminEndpoint(isActive ? '/admin/unban-user' : '/admin/ban-user', {
+        method: 'POST',
+        body: JSON.stringify(
+          isActive
+            ? { userId }
+            : { userId, banReason: 'Disattivato da admin' }
+        ),
+      });
+    }
+    if (password) {
+      await callNeonAdminEndpoint('/admin/set-user-password', {
+        method: 'POST',
+        body: JSON.stringify({
+          userId,
+          newPassword: password,
+        }),
+      });
+    }
+    const response = await authenticatedFetch(`/api/users/${encodeURIComponent(userId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fullName, password, role, isActive }),
+    });
+    const body = await safeJson(response);
+    if (!response.ok) {
+      throw new Error(body?.error || 'Errore salvataggio utente.');
+    }
+
+    clearAdminEditState();
+    await refreshUsersList();
+    setAdminUsersStatus('Utente aggiornato correttamente.');
+  } catch (error) {
+    setAdminUsersStatus(error.message || 'Errore salvataggio utente.');
+  }
+}
+
+async function handleAdminDeleteUser(userId) {
+  const normalizedUserId = sanitizeText(userId);
+  if (!normalizedUserId) {
+    return;
+  }
+  const user = state.adminUsersCache.find((item) => sanitizeText(item.id) === normalizedUserId);
+  const label = sanitizeText(user?.full_name) || sanitizeText(user?.email) || 'questo utente';
+  if (!window.confirm(`Vuoi davvero eliminare ${label}?`)) {
+    return;
+  }
+
+  try {
+    validateAdminUserConstraints({
+      targetUser: user,
+      nextRole: sanitizeText(user?.role),
+      nextIsActive: false,
+      action: 'delete',
+    });
+
+    setAdminUsersStatus('Eliminazione utente in corso...');
+    await callNeonAdminEndpoint('/admin/remove-user', {
+      method: 'POST',
+      body: JSON.stringify({ userId: normalizedUserId }),
+    });
+    const response = await authenticatedFetch(`/api/users/${encodeURIComponent(normalizedUserId)}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      const body = await safeJson(response);
+      throw new Error(body?.error || 'Errore eliminazione utente.');
+    }
+
+    if (state.adminEditingUserId === normalizedUserId) {
+      clearAdminEditState();
+    }
+    await refreshUsersList();
+    setAdminUsersStatus('Utente eliminato correttamente.');
+  } catch (error) {
+    setAdminUsersStatus(error.message || 'Errore eliminazione utente.');
+  }
+}
+
 function bindEvents() {
+  elements.btnBootstrapAdmin?.addEventListener('click', () => {
+    void handleBootstrapAdmin();
+  });
+  elements.btnLogin?.addEventListener('click', () => {
+    void handleLogin();
+  });
+  elements.btnLogout?.addEventListener('click', () => {
+    void handleLogout();
+  });
   elements.btnNuovo.addEventListener('click', handleNewForm);
   elements.btnImportContractPdf?.addEventListener('click', openImportContractModal);
   elements.btnManageImportedContracts?.addEventListener('click', openImportedContractsManagerModal);
+  elements.btnOpenUserAdmin?.addEventListener('click', () => {
+    clearAdminEditState();
+    void refreshUsersList();
+  });
+  elements.btnAdminCreateUser?.addEventListener('click', () => {
+    void handleAdminCreateUser();
+  });
+  elements.btnAdminSaveUser?.addEventListener('click', () => {
+    void handleAdminSaveUser();
+  });
+  elements.btnAdminCancelEdit?.addEventListener('click', () => {
+    clearAdminEditState();
+    setAdminUsersStatus(`${state.adminUsersCache.length || 0} utenti disponibili.`);
+  });
+  elements.adminUsersList?.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-user-action]');
+    if (!trigger) {
+      return;
+    }
+    const userId = sanitizeText(trigger.dataset.userId);
+    const action = sanitizeText(trigger.dataset.userAction);
+    if (!userId || !action) {
+      return;
+    }
+    if (action === 'edit') {
+      const selectedUser = state.adminUsersCache.find((item) => sanitizeText(item.id) === userId);
+      openAdminEditState(selectedUser);
+      return;
+    }
+    if (action === 'delete') {
+      void handleAdminDeleteUser(userId);
+    }
+  });
   elements.btnSalva.addEventListener('click', openContractSaveModal);
   elements.btnCarica.addEventListener('click', openContractLoadModal);
   elements.btnGenera.addEventListener('click', async () => {
@@ -1453,7 +2123,7 @@ function buildBlobUploadClientPayload(draft) {
 
 async function fetchBlobClientToken(draft) {
   const pathname = buildImportedContractBlobPath(draft);
-  const response = await fetch(BLOB_TOKEN_ROUTE_URL, {
+  const response = await authenticatedFetch(BLOB_TOKEN_ROUTE_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -1533,7 +2203,7 @@ async function persistImportedContractSource(draft) {
     contractType: draft.contractType,
     templateName: draft.fileName,
   });
-  const templateResponse = await fetch(`/api/templates?${params}`, {
+  const templateResponse = await authenticatedFetch(`/api/templates?${params}`, {
     method: 'POST',
     headers: {
       'Content-Type': draft.contentType || 'application/pdf',
@@ -1611,7 +2281,7 @@ async function saveImportedContractTemplateFlow() {
       signatureFieldName: approvedFields.find((field) => field.type === 'signature')?.originalName || '',
       importedAt: new Date().toISOString(),
     };
-    const response = await fetch('/api/imported-contract-templates', {
+    const response = await authenticatedFetch('/api/imported-contract-templates', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1669,7 +2339,7 @@ async function refreshImportedContractsManagerList({ silentErrors = false } = {}
 
   try {
     elements.importedContractsManagerStatus.textContent = 'Caricamento contratti importati...';
-    const response = await fetch('/api/imported-contract-templates');
+    const response = await authenticatedFetch('/api/imported-contract-templates');
     if (!response.ok) {
       const body = await safeJson(response);
       throw new Error(body?.error || 'Errore caricamento contratti importati.');
@@ -1730,7 +2400,7 @@ function renderImportedContractsManagerList(items) {
 async function openImportedContractEditorById(id) {
   try {
     elements.importedContractsManagerStatus.textContent = 'Apertura contratto importato...';
-    const response = await fetch(`/api/imported-contract-templates/${encodeURIComponent(id)}`);
+    const response = await authenticatedFetch(`/api/imported-contract-templates/${encodeURIComponent(id)}`);
     if (!response.ok) {
       const body = await safeJson(response);
       throw new Error(body?.error || 'Errore caricamento contratto importato.');
@@ -1770,7 +2440,7 @@ async function deleteImportedContractTemplateFromManager(id) {
 
   try {
     elements.importedContractsManagerStatus.textContent = 'Eliminazione contratto importato...';
-    const response = await fetch(`/api/imported-contract-templates/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const response = await authenticatedFetch(`/api/imported-contract-templates/${encodeURIComponent(id)}`, { method: 'DELETE' });
     if (!response.ok && response.status !== 204) {
       const body = await safeJson(response);
       throw new Error(body?.error || 'Errore eliminazione contratto importato.');
@@ -3111,7 +3781,7 @@ async function refreshContractTypeOptions({ preferredValue, silentErrors = false
   renderContractTypeOptions(selectedValue);
 
   try {
-    const response = await fetch('/api/imported-contract-templates');
+    const response = await authenticatedFetch('/api/imported-contract-templates');
     if (!response.ok) {
       const body = await safeJson(response);
       throw new Error(body?.error || 'Errore caricamento contratti importati.');
@@ -3336,7 +4006,7 @@ async function saveCurrentTemplateToDb() {
       templateName: state.selectedTemplateName || state.currentTemplateHash,
     });
 
-    const response = await fetch(`/api/templates?${params}`, {
+    const response = await authenticatedFetch(`/api/templates?${params}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/pdf',
@@ -3460,7 +4130,7 @@ async function fetchTemplateMapping(templateHash) {
 }
 
 async function upsertTemplateMapping(templateHash, mapping) {
-  const response = await fetch('/api/template-mappings', {
+  const response = await authenticatedFetch('/api/template-mappings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -3842,7 +4512,17 @@ async function shareSignatureLinkViaWhatsApp() {
     state.currentContractName = row.name;
     elements.btnContractSaveUpdate.disabled = false;
 
-    const signUrl = buildSignatureShareUrl(row.id);
+    const signatureResponse = await authenticatedFetch(`/api/contracts/${encodeURIComponent(row.id)}/signature-links`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ daysToLive: 14 }),
+    });
+    if (!signatureResponse.ok) {
+      const body = await safeJson(signatureResponse);
+      throw new Error(body?.error || 'Errore creazione link firma.');
+    }
+    const signatureData = await signatureResponse.json();
+    const signUrl = buildSignatureShareUrl(signatureData.token);
     const message = `Firma del contratto "${row.name}": ${signUrl}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
     setStatus('Link firma aperto in WhatsApp.', 'success');
@@ -3912,10 +4592,10 @@ async function startSignatureLinkMode(id) {
   document.body.classList.add('sign-mode');
 
   try {
-    const response = await fetch(`/api/contracts/${encodeURIComponent(normalizedId)}`);
+    const response = await fetch(`/api/signature-links/${encodeURIComponent(normalizedId)}`);
     if (!response.ok) {
       const body = await safeJson(response);
-      throw new Error(body?.error || 'Contratto non trovato.');
+      throw new Error(body?.error || 'Link firma non disponibile.');
     }
     const row = await response.json();
     applyContractPayload(row);
@@ -3953,11 +4633,19 @@ async function confirmSignerSignature() {
 
   try {
     elements.signatureInfo.textContent = 'Invio della firma in corso...';
-    const row = await upsertContractToCloud({
-      id: state.signModeId,
-      name: state.currentContractName || state.signModeId,
-      payload: buildContractPayload(),
+    const response = await fetch(`/api/signature-links/${encodeURIComponent(state.signModeId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: state.currentContractName || state.signModeId,
+        payload: buildContractPayload(),
+      }),
     });
+    if (!response.ok) {
+      const body = await safeJson(response);
+      throw new Error(body?.error || 'Errore invio firma.');
+    }
+    const row = await response.json();
     state.currentContractName = row.name;
     elements.signatureError.textContent = '';
     elements.signatureInfo.textContent = 'Firma inviata correttamente. Grazie!';
@@ -3975,7 +4663,7 @@ async function confirmSignerSignature() {
 }
 
 async function upsertContractToCloud({ id, name, payload }) {
-  const response = await fetch('/api/contracts', {
+  const response = await authenticatedFetch('/api/contracts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -3997,7 +4685,7 @@ async function upsertContractToCloud({ id, name, payload }) {
 async function refreshContractList({ silentErrors } = {}) {
   try {
     const params = new URLSearchParams({ contractType: elements.contractType.value });
-    const response = await fetch(`/api/contracts?${params}`);
+    const response = await authenticatedFetch(`/api/contracts?${params}`);
     if (!response.ok) {
       const body = await safeJson(response);
       throw new Error(body?.error || 'Errore caricamento elenco contratti.');
@@ -4029,7 +4717,10 @@ function renderContractList(items) {
 
   elements.contractLoadList.innerHTML = filtered.map((item) => {
     const updated = formatTimestamp(item.updated_at);
-    const subtitle = updated ? `Aggiornato: ${updated}` : '';
+    const ownerLabel = state.currentUser?.role === 'admin'
+      ? sanitizeText(item.owner_name || item.owner_email)
+      : '';
+    const subtitle = [updated ? `Aggiornato: ${updated}` : '', ownerLabel ? `Utente: ${ownerLabel}` : ''].filter(Boolean).join(' • ');
     return `
       <div class="list-group-item d-flex flex-column flex-md-row gap-2 align-items-md-center justify-content-between">
         <div>
@@ -4048,7 +4739,7 @@ function renderContractList(items) {
 async function loadContractFromCloud(id) {
   try {
     elements.contractLoadStatus.textContent = 'Caricamento contratto...';
-    const response = await fetch(`/api/contracts/${encodeURIComponent(id)}`);
+    const response = await authenticatedFetch(`/api/contracts/${encodeURIComponent(id)}`);
     if (!response.ok) {
       const body = await safeJson(response);
       throw new Error(body?.error || 'Errore caricamento contratto.');
@@ -4073,7 +4764,7 @@ async function deleteContractFromCloud(id) {
 
   try {
     elements.contractLoadStatus.textContent = 'Eliminazione...';
-    const response = await fetch(`/api/contracts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const response = await authenticatedFetch(`/api/contracts/${encodeURIComponent(id)}`, { method: 'DELETE' });
     if (!response.ok && response.status !== 204) {
       const body = await safeJson(response);
       throw new Error(body?.error || 'Errore eliminazione contratto.');

@@ -5,7 +5,7 @@ const express = require('express');
 loadEnvFile(path.join(__dirname, '.env'));
 loadEnvFile(path.join(__dirname, '.env.local'));
 
-const blobClientTokenHandler = require('./api/blob-client-token');
+const blobClientTokenHandler = require('./lib/blob-client-token-handler');
 const {
   checkHealth,
   countAdminUsers,
@@ -499,10 +499,6 @@ app.put('/api/signature-links/:token', async (req, res) => {
 
 app.use(express.static(path.join(__dirname), { dotfiles: 'ignore', index: 'index.html' }));
 
-app.listen(PORT, () => {
-  process.stdout.write(`Server avviato su http://localhost:${PORT}\n`);
-});
-
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) {
     return;
@@ -536,3 +532,11 @@ function loadEnvFile(filePath) {
     process.env[key] = value;
   }
 }
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    process.stdout.write(`Server avviato su http://localhost:${PORT}\n`);
+  });
+}
+
+module.exports = app;

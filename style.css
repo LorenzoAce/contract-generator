@@ -1524,6 +1524,10 @@ body.sign-mode .row {
     justify-self: start;
   }
 
+  .session-pill__name {
+    display: none;
+  }
+
   .contract-picker {
     grid-area: picker;
     width: 100%;

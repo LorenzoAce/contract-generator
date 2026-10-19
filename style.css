@@ -1493,31 +1493,45 @@ body.sign-mode .row {
     top: 0.5rem;
   }
 
-  .brand-block {
-    align-items: flex-start;
+  .app-header > .d-flex {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "logo name name"
+      "pill pill actions"
+      "picker picker picker";
+    align-items: center;
+    column-gap: 0.75rem;
+    row-gap: 0.6rem;
+  }
+
+  .brand-block,
+  .hero-toolbar--compact {
+    display: contents;
   }
 
   .brand-mark {
-    height: 3.5rem;
-    align-self: flex-start;
+    grid-area: logo;
+    height: 3rem;
   }
 
-  .hero-toolbar--compact,
-  .header-menu {
+  .brand-copy {
+    grid-area: name;
+  }
+
+  .session-pill {
+    grid-area: pill;
+    justify-self: start;
+  }
+
+  .contract-picker {
+    grid-area: picker;
     width: 100%;
-    min-width: 0;
   }
 
-  .contract-picker,
-  .header-actions,
-  .header-menu,
-  .header-menu__trigger,
-  .header-logout-btn {
-    width: 100%;
-  }
-
-  .contract-picker__trigger {
-    max-width: 100%;
+  .header-actions {
+    grid-area: actions;
+    justify-self: end;
   }
 
   .contract-picker__trigger-value {

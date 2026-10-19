@@ -35,7 +35,7 @@ body.app-shell {
 }
 
 .auth-gate__card {
-  width: min(100%, 34rem);
+  width: min(100%, 27.2rem);
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--card-border);
   border-radius: 1.5rem;

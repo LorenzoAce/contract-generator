@@ -667,6 +667,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   toggleCriminalFields();
 
   if (signId) {
+    elements.authGate?.classList.add('d-none');
+    elements.appShellContent?.classList.remove('d-none');
     await startSignatureLinkMode(signId);
     document.body.classList.remove('sign-mode-loading');
     setupFooterOffsetSync();

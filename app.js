@@ -1,9 +1,10 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.59';
+const APP_VERSION = '1.60';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
+const AUTH_TOKEN_CACHE_KEY = 'contract-generator-auth-token-v1';
 const COMUNI_DATASET_URL = 'https://raw.githubusercontent.com/matteocontrini/comuni-json/master/comuni.json';
 const COMUNI_CACHE_KEY = 'contract-generator-comuni-cache-v1';
 const COMUNI_CACHE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 30;
@@ -778,11 +779,49 @@ function showAuthError(message) {
   elements.authErrorBox.classList.toggle('d-none', !normalizedMessage);
 }
 
+function resolveAuthClientBaseUrl() {
+  const rawBaseUrl = sanitizeText(state.neonAuthConfig?.baseUrl);
+  if (!rawBaseUrl) {
+    return '';
+  }
+  try {
+    return new URL(rawBaseUrl, window.location.origin).toString().replace(/\/+$/, '');
+  } catch (_error) {
+    return rawBaseUrl;
+  }
+}
+
+function readCachedAuthToken() {
+  try {
+    return sanitizeText(localStorage.getItem(AUTH_TOKEN_CACHE_KEY));
+  } catch (_error) {
+    return '';
+  }
+}
+
+function cacheAuthToken(token) {
+  const normalizedToken = sanitizeText(token);
+  try {
+    if (normalizedToken) {
+      localStorage.setItem(AUTH_TOKEN_CACHE_KEY, normalizedToken);
+    } else {
+      localStorage.removeItem(AUTH_TOKEN_CACHE_KEY);
+    }
+  } catch (_error) {
+    // Storage non disponibile: nessuna cache, il flusso continua senza fallback.
+  }
+}
+
+function extractAuthTokenFromSignInResult(result) {
+  const data = result?.data && typeof result.data === 'object' ? result.data : {};
+  return sanitizeText(data.session?.token || data.token || result?.token);
+}
+
 async function getNeonAuthClient() {
   if (state.neonAuthClient) {
     return state.neonAuthClient;
   }
-  const authBaseUrl = sanitizeText(state.neonAuthConfig?.baseUrl);
+  const authBaseUrl = resolveAuthClientBaseUrl();
   if (!authBaseUrl) {
     throw new Error('NEON_AUTH_BASE_URL non configurato.');
   }
@@ -813,10 +852,15 @@ async function getNeonAccessToken() {
     const token = typeof authClient.getJWTToken === 'function'
       ? await authClient.getJWTToken()
       : '';
-    return sanitizeText(token);
+    const normalizedToken = sanitizeText(token);
+    if (normalizedToken) {
+      cacheAuthToken(normalizedToken);
+      return normalizedToken;
+    }
   } catch (_error) {
-    return '';
+    // Fallback sul token in cache.
   }
+  return readCachedAuthToken();
 }
 
 async function authenticatedFetch(resource, options = {}) {
@@ -829,7 +873,7 @@ async function authenticatedFetch(resource, options = {}) {
 }
 
 async function callNeonAdminEndpoint(endpointPath, options = {}) {
-  const authBaseUrl = sanitizeText(state.neonAuthConfig?.baseUrl);
+  const authBaseUrl = resolveAuthClientBaseUrl();
   if (!authBaseUrl) {
     throw new Error('Neon Better Auth non configurato.');
   }
@@ -935,6 +979,7 @@ async function handleBootstrapAdmin() {
     if (result?.error) {
       throw new Error(parseNeonAuthError(result, 'Errore creazione account admin.'));
     }
+    cacheAuthToken(extractAuthTokenFromSignInResult(result));
     await refreshCurrentUser();
     showAuthenticatedApp();
     loadFromLocalStorage({ silent: true, notifyIfMissing: false });
@@ -957,6 +1002,7 @@ async function handleLogin() {
     if (result?.error) {
       throw new Error(parseNeonAuthError(result, 'Errore login.'));
     }
+    cacheAuthToken(extractAuthTokenFromSignInResult(result));
     await refreshCurrentUser();
     showAuthenticatedApp();
     loadFromLocalStorage({ silent: true, notifyIfMissing: false });
@@ -979,6 +1025,7 @@ async function handleLogout() {
     // Ignore logout transport errors and force local reset.
   }
   state.currentUser = null;
+  cacheAuthToken('');
   showAuthError('');
   showAuthScreen({ bootstrapMode: !state.bootstrapInitialized });
 }

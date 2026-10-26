@@ -41,7 +41,80 @@ const {
 
 const PORT = Number(process.env.PORT) || 3000;
 
+const NEON_AUTH_PROXY_PATH = '/api/auth-proxy';
+
+const AUTH_PROXY_REQUEST_SKIP_HEADERS = new Set([
+  'host',
+  'connection',
+  'content-length',
+  'accept-encoding',
+  'transfer-encoding',
+  'keep-alive',
+  'upgrade',
+]);
+
+const AUTH_PROXY_RESPONSE_SKIP_HEADERS = new Set([
+  'set-cookie',
+  'content-encoding',
+  'content-length',
+  'transfer-encoding',
+  'connection',
+]);
+
+function rewriteAuthProxyCookie(cookieHeader) {
+  const parts = String(cookieHeader || '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part && !/^domain\s*=/i.test(part) && !/^path\s*=/i.test(part) && !/^partitioned$/i.test(part));
+  parts.push(`Path=${NEON_AUTH_PROXY_PATH}`);
+  return parts.join('; ');
+}
+
+async function handleAuthProxy(req, res) {
+  const authBaseUrl = getAuthBaseUrl();
+  if (!authBaseUrl) {
+    res.status(503).json({ error: 'Neon Auth non configurato. Imposta NEON_AUTH_BASE_URL.' });
+    return;
+  }
+
+  const upstreamPath = (req.originalUrl || '').slice(NEON_AUTH_PROXY_PATH.length) || '/';
+  const upstreamUrl = `${authBaseUrl.replace(/\/+$/, '')}${upstreamPath}`;
+
+  const headers = new Headers();
+  Object.entries(req.headers).forEach(([name, value]) => {
+    if (typeof value === 'string' && !AUTH_PROXY_REQUEST_SKIP_HEADERS.has(name.toLowerCase())) {
+      headers.set(name, value);
+    }
+  });
+
+  const method = (req.method || 'GET').toUpperCase();
+  const body = ['GET', 'HEAD'].includes(method) || !req.body?.length ? undefined : req.body;
+
+  try {
+    const upstream = await fetch(upstreamUrl, { method, headers, body, redirect: 'manual' });
+
+    res.status(upstream.status);
+    upstream.headers.forEach((value, name) => {
+      if (!AUTH_PROXY_RESPONSE_SKIP_HEADERS.has(name.toLowerCase())) {
+        res.setHeader(name, value);
+      }
+    });
+
+    const setCookies = typeof upstream.headers.getSetCookie === 'function' ? upstream.headers.getSetCookie() : [];
+    if (setCookies.length) {
+      res.setHeader('Set-Cookie', setCookies.map(rewriteAuthProxyCookie));
+    }
+
+    res.send(Buffer.from(await upstream.arrayBuffer()));
+  } catch (error) {
+    res.status(502).json({ error: error.message || 'Errore proxy Neon Auth.' });
+  }
+}
+
 const app = express();
+
+app.use(NEON_AUTH_PROXY_PATH, express.raw({ type: '*/*', limit: '2mb' }), handleAuthProxy);
+
 app.use(express.json({ limit: '2mb' }));
 
 app.post('/api/blob-client-token', async (req, res) => {
@@ -71,7 +144,7 @@ async function handleBootstrapStatus(_req, res) {
 function handleAuthConfig(_req, res) {
   res.json({
     configured: Boolean(getAuthBaseUrl()),
-    baseUrl: getAuthBaseUrl(),
+    baseUrl: NEON_AUTH_PROXY_PATH,
   });
 }
 

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.63';
+const APP_VERSION = '1.64';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
@@ -649,6 +649,8 @@ const elements = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   renderAppVersion();
+  initializeStaticAutocomplete();
+  bindEvents();
 
   const signId = new URLSearchParams(window.location.search).get('sign');
   if (signId) {
@@ -657,18 +659,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     state.currentStep = SIGNATURE_STEP_INDEX;
     document.body.classList.add('sign-mode', 'sign-mode-loading');
     updateStepVisibility();
-  }
+    await refreshContractTypeOptions({ preferredValue: 'pvr-vincitu', silentErrors: true });
+    initializeCanvas();
+    renderStepper();
+    setDefaultDates();
+    updateDocumentUploadsMeta();
+    toggleCriminalFields();
 
-  await refreshContractTypeOptions({ preferredValue: 'pvr-vincitu', silentErrors: true });
-  initializeCanvas();
-  initializeStaticAutocomplete();
-  renderStepper();
-  bindEvents();
-  setDefaultDates();
-  updateDocumentUploadsMeta();
-  toggleCriminalFields();
-
-  if (signId) {
     elements.authGate?.classList.add('d-none');
     elements.appShellContent?.classList.remove('d-none');
     await startSignatureLinkMode(signId);
@@ -681,6 +678,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!authenticated) {
     return;
   }
+
+  await refreshContractTypeOptions({ preferredValue: 'pvr-vincitu', silentErrors: true });
+  initializeCanvas();
+  renderStepper();
+  setDefaultDates();
+  updateDocumentUploadsMeta();
+  toggleCriminalFields();
 
   loadFromLocalStorage({ silent: true, notifyIfMissing: false });
   refreshUi();

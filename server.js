@@ -61,6 +61,14 @@ const AUTH_PROXY_RESPONSE_SKIP_HEADERS = new Set([
   'connection',
 ]);
 
+function shouldSkipUpstreamHeader(name) {
+  return AUTH_PROXY_REQUEST_SKIP_HEADERS.has(name)
+    || name.startsWith('x-forwarded-')
+    || name.startsWith('x-vercel-')
+    || name === 'forwarded'
+    || name === 'x-real-ip';
+}
+
 function rewriteAuthProxyCookie(cookieHeader) {
   const parts = String(cookieHeader || '')
     .split(';')
@@ -82,7 +90,7 @@ async function handleAuthProxy(req, res) {
 
   const headers = new Headers();
   Object.entries(req.headers).forEach(([name, value]) => {
-    if (typeof value === 'string' && !AUTH_PROXY_REQUEST_SKIP_HEADERS.has(name.toLowerCase())) {
+    if (typeof value === 'string' && !shouldSkipUpstreamHeader(name.toLowerCase())) {
       headers.set(name, value);
     }
   });

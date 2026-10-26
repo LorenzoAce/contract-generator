@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.60';
+const APP_VERSION = '1.61';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
@@ -503,6 +503,7 @@ const elements = {
   loginPanel: document.getElementById('loginPanel'),
   loginEmail: document.getElementById('loginEmail'),
   loginPassword: document.getElementById('loginPassword'),
+  btnToggleLoginPassword: document.getElementById('btnToggleLoginPassword'),
   btnLogin: document.getElementById('btnLogin'),
   btnLogout: document.getElementById('btnLogout'),
   sessionPill: document.getElementById('sessionPill'),
@@ -738,11 +739,25 @@ function showAuthScreen({ bootstrapMode }) {
   elements.appShellContent?.classList.add('d-none');
   elements.bootstrapPanel?.classList.toggle('d-none', !bootstrapMode);
   elements.loginPanel?.classList.toggle('d-none', Boolean(bootstrapMode));
+  setPasswordVisibility(elements.loginPassword, elements.btnToggleLoginPassword, false);
   if (bootstrapMode) {
     elements.bootstrapFullName?.focus();
   } else {
     elements.loginEmail?.focus();
   }
+}
+
+function setPasswordVisibility(input, toggle, showPassword) {
+  if (!input || !toggle) {
+    return;
+  }
+  input.type = showPassword ? 'text' : 'password';
+  toggle.setAttribute('aria-pressed', String(showPassword));
+  const label = showPassword ? 'Nascondi password' : 'Mostra password';
+  toggle.setAttribute('aria-label', label);
+  toggle.setAttribute('title', label);
+  toggle.querySelector('.password-toggle__icon--show')?.classList.toggle('d-none', showPassword);
+  toggle.querySelector('.password-toggle__icon--hide')?.classList.toggle('d-none', !showPassword);
 }
 
 function showAuthenticatedApp() {
@@ -1325,6 +1340,12 @@ function bindEvents() {
   });
   elements.btnLogin?.addEventListener('click', () => {
     void handleLogin();
+  });
+  elements.btnToggleLoginPassword?.addEventListener('mousedown', (event) => {
+    event.preventDefault();
+  });
+  elements.btnToggleLoginPassword?.addEventListener('click', () => {
+    setPasswordVisibility(elements.loginPassword, elements.btnToggleLoginPassword, elements.loginPassword?.type === 'password');
   });
   elements.btnLogout?.addEventListener('click', () => {
     void handleLogout();

@@ -504,7 +504,14 @@ const elements = {
   loginForm: document.getElementById('loginForm'),
   loginEmail: document.getElementById('loginEmail'),
   loginPassword: document.getElementById('loginPassword'),
-  btnToggleLoginPassword: document.getElementById('btnToggleLoginPassword'),
+  btnOpenChangePassword: document.getElementById('btnOpenChangePassword'),
+  changePasswordModal: document.getElementById('changePasswordModal'),
+  changePasswordForm: document.getElementById('changePasswordForm'),
+  changePasswordCurrent: document.getElementById('changePasswordCurrent'),
+  changePasswordNew: document.getElementById('changePasswordNew'),
+  changePasswordConfirm: document.getElementById('changePasswordConfirm'),
+  changePasswordFeedback: document.getElementById('changePasswordFeedback'),
+  btnChangePasswordSubmit: document.getElementById('btnChangePasswordSubmit'),
   btnLogout: document.getElementById('btnLogout'),
   sessionPill: document.getElementById('sessionPill'),
   sessionUserName: document.getElementById('sessionUserName'),
@@ -650,6 +657,7 @@ const elements = {
 document.addEventListener('DOMContentLoaded', async () => {
   renderAppVersion();
   initializeStaticAutocomplete();
+  enhancePasswordFields();
   bindEvents();
 
   const signId = new URLSearchParams(window.location.search).get('sign');
@@ -746,7 +754,7 @@ function showAuthScreen({ bootstrapMode }) {
   elements.appShellContent?.classList.add('d-none');
   elements.bootstrapPanel?.classList.toggle('d-none', !bootstrapMode);
   elements.loginPanel?.classList.toggle('d-none', Boolean(bootstrapMode));
-  setPasswordVisibility(elements.loginPassword, elements.btnToggleLoginPassword, false);
+  setPasswordVisibilityById('loginPassword', false);
   if (bootstrapMode) {
     elements.bootstrapFullName?.focus();
   } else {
@@ -765,6 +773,104 @@ function setPasswordVisibility(input, toggle, showPassword) {
   toggle.setAttribute('title', label);
   toggle.querySelector('.password-toggle__icon--show')?.classList.toggle('d-none', showPassword);
   toggle.querySelector('.password-toggle__icon--hide')?.classList.toggle('d-none', !showPassword);
+}
+
+const PASSWORD_TOGGLE_ICONS = `
+  <svg class="password-toggle__icon password-toggle__icon--show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M1.9 12S5.5 5.8 12 5.8 22.1 12 22.1 12 18.5 18.2 12 18.2 1.9 12 1.9 12Z"></path>
+    <circle cx="12" cy="12" r="3.2"></circle>
+  </svg>
+  <svg class="password-toggle__icon password-toggle__icon--hide d-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 3l18 18"></path>
+    <path d="M10.6 5.9A9.7 9.7 0 0 1 12 5.8c6.5 0 10.1 6.2 10.1 6.2a17.6 17.6 0 0 1-3 3.7"></path>
+    <path d="M6.6 7.4A17.4 17.4 0 0 0 1.9 12S5.5 18.2 12 18.2a10 10 0 0 0 4-.8"></path>
+    <path d="M9.9 9.9a3.2 3.2 0 0 0 4.3 4.6"></path>
+  </svg>
+`;
+
+function enhancePasswordFields() {
+  document.querySelectorAll('.password-field').forEach((field) => {
+    const input = field.querySelector('input');
+    if (!input?.id || field.querySelector('.password-toggle')) {
+      return;
+    }
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'password-toggle';
+    toggle.dataset.passwordToggle = input.id;
+    toggle.setAttribute('aria-label', 'Mostra password');
+    toggle.setAttribute('aria-pressed', 'false');
+    toggle.title = 'Mostra password';
+    toggle.innerHTML = PASSWORD_TOGGLE_ICONS;
+    field.appendChild(toggle);
+  });
+}
+
+function setPasswordVisibilityById(inputId, showPassword) {
+  const input = document.getElementById(inputId);
+  if (!input) {
+    return;
+  }
+  const toggle = document.querySelector(`.password-toggle[data-password-toggle="${inputId}"]`);
+  setPasswordVisibility(input, toggle, showPassword);
+}
+
+function resetChangePasswordForm() {
+  ['changePasswordCurrent', 'changePasswordNew', 'changePasswordConfirm'].forEach((id) => {
+    const input = document.getElementById(id);
+    if (input) {
+      input.value = '';
+    }
+    setPasswordVisibilityById(id, false);
+  });
+}
+
+function showChangePasswordFeedback(message, variant = 'danger') {
+  const box = elements.changePasswordFeedback;
+  if (!box) {
+    return;
+  }
+  box.textContent = message || '';
+  box.classList.toggle('d-none', !message);
+  box.classList.toggle('alert-success', variant === 'success');
+  box.classList.toggle('alert-danger', variant !== 'success');
+}
+
+function setChangePasswordSubmitting(isSubmitting) {
+  const button = elements.btnChangePasswordSubmit;
+  if (!button) {
+    return;
+  }
+  button.disabled = isSubmitting;
+  button.textContent = isSubmitting ? 'Aggiornamento...' : 'Aggiorna password';
+}
+
+async function handleChangePassword() {
+  try {
+    showChangePasswordFeedback('');
+    const currentPassword = String(elements.changePasswordCurrent?.value || '');
+    const newPassword = String(elements.changePasswordNew?.value || '');
+    const confirmPassword = String(elements.changePasswordConfirm?.value || '');
+
+    if (!currentPassword || !newPassword) {
+      throw new Error('Inserisci la password attuale e la nuova password.');
+    }
+    if (newPassword !== confirmPassword) {
+      throw new Error('Le due nuove password non coincidono.');
+    }
+
+    setChangePasswordSubmitting(true);
+    await callNeonAdminEndpoint('/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword, revokeOtherSessions: false }),
+    });
+    resetChangePasswordForm();
+    showChangePasswordFeedback('Password aggiornata correttamente.', 'success');
+  } catch (error) {
+    showChangePasswordFeedback(error.message || 'Errore cambio password.');
+  } finally {
+    setChangePasswordSubmitting(false);
+  }
 }
 
 function showAuthenticatedApp() {
@@ -1349,11 +1455,26 @@ function bindEvents() {
     event.preventDefault();
     void handleLogin();
   });
-  elements.btnToggleLoginPassword?.addEventListener('mousedown', (event) => {
-    event.preventDefault();
+  document.addEventListener('mousedown', (event) => {
+    if (event.target.closest('.password-toggle')) {
+      event.preventDefault();
+    }
   });
-  elements.btnToggleLoginPassword?.addEventListener('click', () => {
-    setPasswordVisibility(elements.loginPassword, elements.btnToggleLoginPassword, elements.loginPassword?.type === 'password');
+  document.addEventListener('click', (event) => {
+    const toggle = event.target.closest('.password-toggle');
+    if (!toggle) {
+      return;
+    }
+    const input = document.getElementById(toggle.dataset.passwordToggle);
+    setPasswordVisibility(input, toggle, input?.type === 'password');
+  });
+  elements.changePasswordForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void handleChangePassword();
+  });
+  elements.btnOpenChangePassword?.addEventListener('click', () => {
+    resetChangePasswordForm();
+    showChangePasswordFeedback('');
   });
   elements.btnLogout?.addEventListener('click', () => {
     void handleLogout();

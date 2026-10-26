@@ -374,8 +374,11 @@ app.post('/api/contracts', async (req, res) => {
       ? await getContract({ id: req.body.id, ownerUserId: user.id, isAdmin: user.is_admin })
       : null;
     if (req.body?.id && !existing && !user.is_admin) {
-      res.status(404).json({ error: 'Contratto non trovato.' });
-      return;
+      const ownedByOther = await getContract({ id: req.body.id, isAdmin: true });
+      if (ownedByOther) {
+        res.status(404).json({ error: 'Contratto non trovato.' });
+        return;
+      }
     }
     const ownerUserId = existing?.owner_user_id || user.id;
     const row = await saveContract({ ...(req.body || {}), ownerUserId });

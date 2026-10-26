@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.61';
+const APP_VERSION = '1.62';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
@@ -501,10 +501,10 @@ const elements = {
   bootstrapPassword: document.getElementById('bootstrapPassword'),
   btnBootstrapAdmin: document.getElementById('btnBootstrapAdmin'),
   loginPanel: document.getElementById('loginPanel'),
+  loginForm: document.getElementById('loginForm'),
   loginEmail: document.getElementById('loginEmail'),
   loginPassword: document.getElementById('loginPassword'),
   btnToggleLoginPassword: document.getElementById('btnToggleLoginPassword'),
-  btnLogin: document.getElementById('btnLogin'),
   btnLogout: document.getElementById('btnLogout'),
   sessionPill: document.getElementById('sessionPill'),
   sessionUserName: document.getElementById('sessionUserName'),
@@ -713,6 +713,9 @@ async function initializeAuthentication() {
       showAuthScreen({ bootstrapMode: !state.bootstrapInitialized });
       return false;
     }
+
+    // Precarica il client auth mentre l'utente inserisce le credenziali.
+    void getNeonAuthClient().catch(() => {});
 
     if (state.bootstrapInitialized) {
       try {
@@ -1338,7 +1341,8 @@ function bindEvents() {
   elements.btnBootstrapAdmin?.addEventListener('click', () => {
     void handleBootstrapAdmin();
   });
-  elements.btnLogin?.addEventListener('click', () => {
+  elements.loginForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
     void handleLogin();
   });
   elements.btnToggleLoginPassword?.addEventListener('mousedown', (event) => {

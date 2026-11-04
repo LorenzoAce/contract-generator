@@ -127,7 +127,10 @@ app.use(NEON_AUTH_PROXY_PATH, express.raw({ type: '*/*', limit: '2mb' }), handle
 app.use(express.json({ limit: '2mb' }));
 
 app.post('/api/blob-client-token', async (req, res) => {
-  const user = await requireAdmin(req, res);
+  const pathname = String(req.body?.pathname || '');
+  const user = pathname.startsWith('imported-contracts/')
+    ? await requireAdmin(req, res)
+    : await requireAuth(req, res);
   if (!user) {
     return;
   }

@@ -72,7 +72,7 @@
           <img src="./assets/logos/contract-generator-logo.png" alt="" class="brand-mark">
           <div class="brand-copy">
             <div class="brand-title-row mb-1">
-              <h1 class="display-title mb-0">Contract Generator <span class="app-version" id="appVersion">1.66</span></h1>
+              <h1 class="display-title mb-0">Contract Generator <span class="app-version" id="appVersion">1.67</span></h1>
             </div>
             <p class="hero-copy mb-0">Compilazione guidata del contratto e degli allegati in pochi passaggi.</p>
           </div>
@@ -489,12 +489,28 @@
                       <input type="date" class="form-control" id="documentExpiryDate" name="documentExpiryDate" data-required="true">
                       <div class="invalid-feedback"></div>
                     </div>
-                    <div class="col-md-8">
-                      <label for="documentUploads" class="form-label required">Upload documenti</label>
-                      <input type="file" class="form-control" id="documentUploads" multiple accept=".pdf,.jpg,.jpeg,.png">
-                      <input type="hidden" id="documentUploadsMeta" name="documentUploadsMeta" data-required="true">
-                      <div class="form-text" id="documentUploadsInfo">Nessun file selezionato.</div>
-                      <div class="invalid-feedback d-block" id="documentUploadsError"></div>
+                    <div class="col-12">
+                      <label class="form-label required">Allegati documento</label>
+                      <div class="row g-3">
+                        <div class="col-md-4">
+                          <label for="documentFrontUpload" class="form-label required">Fronte documento</label>
+                          <input type="file" class="form-control" id="documentFrontUpload" accept=".pdf,.jpg,.jpeg,.png">
+                          <div class="form-text" id="documentFrontInfo">Nessun file selezionato.</div>
+                          <div class="invalid-feedback d-block" id="documentFrontError"></div>
+                        </div>
+                        <div class="col-md-4">
+                          <label for="documentBackUpload" class="form-label required">Retro documento</label>
+                          <input type="file" class="form-control" id="documentBackUpload" accept=".pdf,.jpg,.jpeg,.png">
+                          <div class="form-text" id="documentBackInfo">Nessun file selezionato.</div>
+                          <div class="invalid-feedback d-block" id="documentBackError"></div>
+                        </div>
+                        <div class="col-md-4">
+                          <label for="visuraUpload" class="form-label">Visura camerale</label>
+                          <input type="file" class="form-control" id="visuraUpload" accept=".pdf,.jpg,.jpeg,.png">
+                          <div class="form-text" id="visuraInfo">Nessun file selezionato.</div>
+                          <div class="invalid-feedback d-block" id="visuraError"></div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 

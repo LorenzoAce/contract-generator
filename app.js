@@ -1,9 +1,16 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.66';
+const APP_VERSION = '1.67';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
+const CONTRACT_ATTACHMENT_ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
+const MAX_CONTRACT_ATTACHMENT_SIZE_BYTES = 25 * 1024 * 1024;
+const CONTRACT_ATTACHMENT_SLOTS = [
+  { key: 'docFront', pathPrefix: 'doc-front', label: 'Fronte documento', required: true, inputId: 'documentFrontUpload', infoId: 'documentFrontInfo', errorId: 'documentFrontError' },
+  { key: 'docBack', pathPrefix: 'doc-back', label: 'Retro documento', required: true, inputId: 'documentBackUpload', infoId: 'documentBackInfo', errorId: 'documentBackError' },
+  { key: 'visura', pathPrefix: 'visura', label: 'Visura camerale', required: false, inputId: 'visuraUpload', infoId: 'visuraInfo', errorId: 'visuraError' },
+];
 const AUTH_TOKEN_CACHE_KEY = 'contract-generator-auth-token-v1';
 const COMUNI_DATASET_URL = 'https://raw.githubusercontent.com/matteocontrini/comuni-json/master/comuni.json';
 const COMUNI_CACHE_KEY = 'contract-generator-comuni-cache-v1';
@@ -484,6 +491,8 @@ const state = {
   isDrawing: false,
   lastPoint: null,
   autosaveTimer: null,
+  attachments: {},
+  attachmentScopeId: '',
   importedContractDraft: null,
   importedContractPdfUrl: '',
   pendingStepTarget: null,
@@ -586,10 +595,15 @@ const elements = {
   antimafiaSummary: document.getElementById('antimafiaSummary'),
   finalSummary: document.getElementById('finalSummary'),
   finalChecklist: document.getElementById('finalChecklist'),
-  documentUploads: document.getElementById('documentUploads'),
-  documentUploadsMeta: document.getElementById('documentUploadsMeta'),
-  documentUploadsInfo: document.getElementById('documentUploadsInfo'),
-  documentUploadsError: document.getElementById('documentUploadsError'),
+  documentFrontUpload: document.getElementById('documentFrontUpload'),
+  documentFrontInfo: document.getElementById('documentFrontInfo'),
+  documentFrontError: document.getElementById('documentFrontError'),
+  documentBackUpload: document.getElementById('documentBackUpload'),
+  documentBackInfo: document.getElementById('documentBackInfo'),
+  documentBackError: document.getElementById('documentBackError'),
+  visuraUpload: document.getElementById('visuraUpload'),
+  visuraInfo: document.getElementById('visuraInfo'),
+  visuraError: document.getElementById('visuraError'),
   annexAConfirmedError: document.getElementById('annexAConfirmedError'),
   antimafiaConfirmedError: document.getElementById('antimafiaConfirmedError'),
   criminalNulla: document.getElementById('criminalNulla'),
@@ -671,7 +685,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeCanvas();
     renderStepper();
     setDefaultDates();
-    updateDocumentUploadsMeta();
+    renderAttachments();
     toggleCriminalFields();
 
     elements.authGate?.classList.add('d-none');
@@ -691,7 +705,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initializeCanvas();
   renderStepper();
   setDefaultDates();
-  updateDocumentUploadsMeta();
+  renderAttachments();
   toggleCriminalFields();
 
   loadFromLocalStorage({ silent: true, notifyIfMissing: false });
@@ -1625,7 +1639,15 @@ function bindEvents() {
       goToStep(nextStep, { validateCurrent: true });
     }
   });
-  elements.documentUploads.addEventListener('change', handleDocumentUploadsChange);
+  CONTRACT_ATTACHMENT_SLOTS.forEach((slot) => {
+    elements[slot.inputId]?.addEventListener('change', () => handleAttachmentUploadChange(slot.key));
+  });
+  elements.form?.addEventListener('click', (event) => {
+    const removeButton = event.target.closest('[data-attachment-remove]');
+    if (removeButton) {
+      removeAttachment(removeButton.dataset.attachmentRemove);
+    }
+  });
   elements.importContractFile?.addEventListener('change', handleImportContractFileChange);
   elements.importContractName?.addEventListener('input', syncImportedContractName);
   elements.importContractSignatureField?.addEventListener('change', handleImportedSignatureFieldChange);
@@ -3742,7 +3764,9 @@ function handleNewForm() {
   elements.contractType.value = 'pvr-vincitu';
   document.getElementById('roleLegale').checked = true;
   setDefaultDates();
-  updateDocumentUploadsMeta();
+  state.attachments = {};
+  state.attachmentScopeId = '';
+  renderAttachments();
   clearValidation();
   clearSignatureCanvas({ silent: true });
   toggleCriminalFields();
@@ -3768,6 +3792,7 @@ function saveToLocalStorage({ silent = false } = {}) {
   payload.currentStep = state.currentStep;
   payload.contractId = state.currentContractId;
   payload.contractName = state.currentContractName;
+  payload.attachments = state.attachments;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   updateAutosaveIndicator('saved');
   if (!silent) {
@@ -3804,7 +3829,9 @@ function loadFromLocalStorage({ silent = false, notifyIfMissing = true } = {}) {
     state.selectedTemplateDbHash = '';
     state.currentTemplateHash = '';
     state.currentTemplateBytes = null;
-    updateDocumentUploadsMeta();
+    state.attachments = (data.attachments && typeof data.attachments === 'object') ? { ...data.attachments } : {};
+    state.attachmentScopeId = '';
+    renderAttachments();
     toggleCriminalFields();
     clearValidation();
     resetGeneratedPdf();
@@ -4707,6 +4734,7 @@ function buildContractPayload() {
   payload.currentStep = state.currentStep;
   payload.contractType = elements.contractType.value;
   payload.appVersion = APP_VERSION;
+  payload.attachments = state.attachments;
   return payload;
 }
 
@@ -5141,6 +5169,8 @@ function applyContractPayload(row) {
 
   syncDynamicContractUi({ force: true });
   populateForm(payload);
+  state.attachments = (payload.attachments && typeof payload.attachments === 'object') ? { ...payload.attachments } : {};
+  state.attachmentScopeId = '';
   if (payload.signatureDataUrl) {
     restoreSignature(payload.signatureDataUrl);
     state.signatureDataUrl = payload.signatureDataUrl;
@@ -5151,7 +5181,7 @@ function applyContractPayload(row) {
   state.currentContractId = sanitizeText(row.id);
   state.currentContractName = sanitizeText(row.name);
 
-  updateDocumentUploadsMeta();
+  renderAttachments();
   toggleCriminalFields();
   resetGeneratedPdf();
   refreshUi();
@@ -5174,19 +5204,140 @@ function generateId() {
   return `c_${Date.now().toString(16)}_${random}`;
 }
 
-function handleDocumentUploadsChange() {
-  updateDocumentUploadsMeta();
+function findAttachmentSlot(slotKey) {
+  return CONTRACT_ATTACHMENT_SLOTS.find((slot) => slot.key === slotKey) || null;
+}
+
+function buildContractAttachmentPath(slot, file) {
+  if (!state.attachmentScopeId) {
+    state.attachmentScopeId = generateId().replace(/[^a-zA-Z0-9]/g, '').toLowerCase() || `scope-${Date.now()}`;
+  }
+  const extension = (sanitizeText(file.name).split('.').pop() || '').toLowerCase();
+  const safeExtension = CONTRACT_ATTACHMENT_ALLOWED_EXTENSIONS.includes(extension) ? extension : 'bin';
+  const unique = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  return `contract-documents/${state.attachmentScopeId}/${slot.pathPrefix}-${unique}.${safeExtension}`;
+}
+
+async function fetchContractAttachmentToken(pathname) {
+  const response = await authenticatedFetch(BLOB_TOKEN_ROUTE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pathname }),
+  });
+  const body = await safeJson(response);
+  if (!response.ok) {
+    throw new Error(sanitizeText(body?.error) || 'Impossibile ottenere il token per il caricamento del file.');
+  }
+  const clientToken = sanitizeText(body?.clientToken);
+  if (!clientToken) {
+    throw new Error('Token di caricamento non ricevuto dal server.');
+  }
+  return clientToken;
+}
+
+async function uploadContractAttachment(slot, file) {
+  const extension = (sanitizeText(file.name).split('.').pop() || '').toLowerCase();
+  if (!CONTRACT_ATTACHMENT_ALLOWED_EXTENSIONS.includes(extension)) {
+    throw new Error('Formato non supportato. Usa PDF, JPG o PNG.');
+  }
+  if (file.size > MAX_CONTRACT_ATTACHMENT_SIZE_BYTES) {
+    throw new Error('File troppo grande. Il limite e 25 MB.');
+  }
+
+  let put;
+  try {
+    ({ put } = await import(BLOB_CLIENT_MODULE_URL));
+  } catch (error) {
+    console.error(error);
+    throw new Error('Impossibile inizializzare il caricamento del file. Verifica la connessione e riprova.');
+  }
+
+  const pathname = buildContractAttachmentPath(slot, file);
+  const clientToken = await fetchContractAttachmentToken(pathname);
+  const blob = await put(pathname, file, { access: 'public', token: clientToken });
+  return {
+    name: sanitizeText(file.name),
+    url: sanitizeText(blob.url),
+    downloadUrl: sanitizeText(blob.downloadUrl || blob.url),
+    pathname: sanitizeText(blob.pathname || pathname),
+    size: Number(blob.size) || file.size || 0,
+    contentType: sanitizeText(blob.contentType) || file.type || '',
+    uploadedAt: new Date().toISOString(),
+  };
+}
+
+async function handleAttachmentUploadChange(slotKey) {
+  const slot = findAttachmentSlot(slotKey);
+  if (!slot) {
+    return;
+  }
+  const input = elements[slot.inputId];
+  const file = input?.files?.[0] || null;
+  if (!file) {
+    return;
+  }
+
+  elements[slot.errorId].textContent = '';
+  elements[slot.infoId].textContent = 'Caricamento in corso...';
+
+  try {
+    const metadata = await uploadContractAttachment(slot, file);
+    state.attachments[slotKey] = metadata;
+    setStatus(`File caricato: ${metadata.name}`, 'success');
+  } catch (error) {
+    delete state.attachments[slotKey];
+    elements[slot.errorId].textContent = error.message || 'Errore caricamento file.';
+    setStatus(elements[slot.errorId].textContent, 'danger');
+  } finally {
+    if (input) {
+      input.value = '';
+    }
+    renderAttachmentSlot(slot);
+    validateDocumentUploads({ silent: true });
+    resetGeneratedPdf();
+    triggerAutosave();
+    refreshUi();
+  }
+}
+
+function removeAttachment(slotKey) {
+  const slot = findAttachmentSlot(slotKey);
+  if (!slot) {
+    return;
+  }
+  delete state.attachments[slotKey];
+  renderAttachmentSlot(slot);
   validateDocumentUploads({ silent: true });
   resetGeneratedPdf();
   triggerAutosave();
   refreshUi();
 }
 
-function updateDocumentUploadsMeta() {
-  const files = Array.from(elements.documentUploads.files || []);
-  const label = files.map((file) => file.name).join(', ');
-  elements.documentUploadsMeta.value = label;
-  elements.documentUploadsInfo.textContent = label || 'Nessun file selezionato.';
+function renderAttachmentSlot(slot) {
+  const infoEl = elements[slot.infoId];
+  if (!infoEl) {
+    return;
+  }
+  const metadata = state.attachments?.[slot.key];
+  if (metadata?.url) {
+    const href = escapeHtml(metadata.downloadUrl || metadata.url);
+    const name = escapeHtml(metadata.name || 'Allegato');
+    infoEl.innerHTML = `<a href="${href}" target="_blank" rel="noopener" download>${name}</a> · <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-attachment-remove="${escapeHtml(slot.key)}">Rimuovi</button>`;
+  } else {
+    infoEl.textContent = 'Nessun file selezionato.';
+  }
+}
+
+function renderAttachments() {
+  CONTRACT_ATTACHMENT_SLOTS.forEach((slot) => {
+    if (elements[slot.inputId]) {
+      elements[slot.inputId].value = '';
+    }
+    if (elements[slot.errorId]) {
+      elements[slot.errorId].textContent = '';
+    }
+    renderAttachmentSlot(slot);
+  });
 }
 
 function toggleCriminalFields() {
@@ -5773,9 +5924,19 @@ function validateSignatureStep({ silent = false } = {}) {
 }
 
 function validateDocumentUploads({ silent = false } = {}) {
-  const value = sanitizeText(elements.documentUploadsMeta.value);
-  const valid = Boolean(value);
-  elements.documentUploadsError.textContent = silent || valid ? '' : 'Allega almeno un documento di identita.';
+  let valid = true;
+  CONTRACT_ATTACHMENT_SLOTS.forEach((slot) => {
+    const errorEl = elements[slot.errorId];
+    const hasFile = Boolean(state.attachments?.[slot.key]?.url);
+    if (slot.required && !hasFile) {
+      valid = false;
+      if (errorEl) {
+        errorEl.textContent = silent ? '' : `Allega il file: ${slot.label}.`;
+      }
+    } else if (errorEl) {
+      errorEl.textContent = '';
+    }
+  });
   return valid;
 }
 
@@ -5904,7 +6065,6 @@ function clearValidation() {
       feedback.textContent = '';
     }
   });
-  elements.documentUploadsError.textContent = '';
   elements.annexAConfirmedError.textContent = '';
   elements.antimafiaConfirmedError.textContent = '';
   elements.signatureError.textContent = '';

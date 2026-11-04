@@ -28,6 +28,7 @@ const {
   getTemplateMapping,
   saveTemplateMapping,
   syncManagedUserRecord,
+  updateContractOwner,
   updateManagedUserRecord,
   getUserById,
 } = require('./lib/template-mapping-service');
@@ -505,6 +506,38 @@ app.put('/api/contracts/:id', async (req, res) => {
       ownerUserId: existing.owner_user_id || user.id,
     });
     res.json(row);
+  } catch (error) {
+    const statusCode = error.message.includes('sono richiesti') ? 400 : error.message.includes('Database non configurato') ? 503 : 500;
+    res.status(statusCode).json({ error: error.message || 'Errore database' });
+  }
+});
+
+app.patch('/api/contracts/:id/owner', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) {
+    return;
+  }
+  try {
+    const existing = await getContract({ id: req.params.id, isAdmin: true });
+    if (!existing) {
+      res.status(404).json({ error: 'Contratto non trovato' });
+      return;
+    }
+
+    const ownerUserId = String(req.body?.ownerUserId || '').trim();
+    if (!ownerUserId) {
+      res.status(400).json({ error: 'ownerUserId è richiesto.' });
+      return;
+    }
+
+    const targetUser = await getUserById(ownerUserId);
+    if (!targetUser) {
+      res.status(404).json({ error: 'Utente di destinazione non trovato.' });
+      return;
+    }
+
+    const item = await updateContractOwner({ id: existing.id, ownerUserId });
+    res.json({ item });
   } catch (error) {
     const statusCode = error.message.includes('sono richiesti') ? 400 : error.message.includes('Database non configurato') ? 503 : 500;
     res.status(statusCode).json({ error: error.message || 'Errore database' });

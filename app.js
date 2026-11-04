@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.65';
+const APP_VERSION = '1.66';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
@@ -1603,6 +1603,10 @@ function bindEvents() {
     }
     if (action === 'load') {
       loadContractFromCloud(id);
+      return;
+    }
+    if (action === 'reassign') {
+      reassignContractOwner(id, button);
       return;
     }
     if (action === 'delete') {
@@ -4666,9 +4670,25 @@ function openContractSaveModal() {
 async function openContractLoadModal() {
   elements.contractLoadFilter.value = '';
   elements.contractLoadStatus.textContent = 'Caricamento elenco...';
+  if (state.currentUser?.role === 'admin') {
+    await loadContractAssignableUsers();
+  }
   await refreshContractList({ silentErrors: false });
   const modal = window.bootstrap.Modal.getOrCreateInstance(elements.contractLoadModal);
   modal.show();
+}
+
+async function loadContractAssignableUsers() {
+  try {
+    const response = await authenticatedFetch('/api/users');
+    if (!response.ok) {
+      return;
+    }
+    const data = await response.json();
+    state.adminUsersCache = Array.isArray(data.items) ? data.items : [];
+  } catch (_error) {
+    // Best effort: la lista contratti resta utilizzabile anche senza l'elenco utenti.
+  }
 }
 
 function buildDefaultContractName() {
@@ -4956,23 +4976,99 @@ function renderContractList(items) {
 
   elements.contractLoadList.innerHTML = filtered.map((item) => {
     const updated = formatTimestamp(item.updated_at);
-    const ownerLabel = state.currentUser?.role === 'admin'
+    const isAdmin = state.currentUser?.role === 'admin';
+    const ownerLabel = isAdmin
       ? sanitizeText(item.owner_name || item.owner_email)
       : '';
     const subtitle = [updated ? `Aggiornato: ${updated}` : '', ownerLabel ? `Utente: ${ownerLabel}` : ''].filter(Boolean).join(' • ');
+    const ownerControl = isAdmin
+      ? `
+        <div class="d-flex gap-2 align-items-center">
+          <select class="form-select form-select-sm" data-contract-owner-select aria-label="Sposta contratto a un altro utente">
+            ${renderContractOwnerOptions(item.owner_user_id)}
+          </select>
+          <button type="button" class="btn btn-sm btn-outline-primary" data-contract-action="reassign" data-contract-id="${escapeHtml(item.id)}">Sposta</button>
+        </div>
+      `
+      : '';
     return `
       <div class="list-group-item d-flex flex-column flex-md-row gap-2 align-items-md-center justify-content-between">
         <div>
           <div class="fw-semibold">${escapeHtml(item.name || 'Senza nome')}</div>
           <div class="small text-secondary">${escapeHtml(subtitle)}</div>
         </div>
-        <div class="d-flex gap-2">
-          <button type="button" class="btn btn-sm btn-primary" data-contract-action="load" data-contract-id="${escapeHtml(item.id)}">Carica</button>
-          <button type="button" class="btn btn-sm btn-outline-danger" data-contract-action="delete" data-contract-id="${escapeHtml(item.id)}">Elimina</button>
+        <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center">
+          ${ownerControl}
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-primary" data-contract-action="load" data-contract-id="${escapeHtml(item.id)}">Carica</button>
+            <button type="button" class="btn btn-sm btn-outline-danger" data-contract-action="delete" data-contract-id="${escapeHtml(item.id)}">Elimina</button>
+          </div>
         </div>
       </div>
     `;
   }).join('');
+}
+
+function renderContractOwnerOptions(currentOwnerId) {
+  const normalizedCurrent = sanitizeText(currentOwnerId);
+  const users = (state.adminUsersCache || [])
+    .filter((user) => user && user.is_active !== false)
+    .map((user) => ({
+      id: sanitizeText(user.id),
+      label: sanitizeText(user.full_name) || sanitizeText(user.email) || sanitizeText(user.id),
+    }))
+    .filter((user) => user.id);
+
+  const hasCurrent = users.some((user) => user.id === normalizedCurrent);
+  const options = users.map((user) => {
+    const selected = user.id === normalizedCurrent ? ' selected' : '';
+    return `<option value="${escapeHtml(user.id)}"${selected}>${escapeHtml(user.label)}</option>`;
+  });
+
+  if (normalizedCurrent && !hasCurrent) {
+    options.unshift(`<option value="${escapeHtml(normalizedCurrent)}" selected>Utente attuale</option>`);
+  }
+
+  return options.join('');
+}
+
+async function reassignContractOwner(contractId, button) {
+  const row = button?.closest('.list-group-item');
+  const select = row?.querySelector('[data-contract-owner-select]');
+  const ownerUserId = sanitizeText(select?.value);
+  if (!contractId || !ownerUserId) {
+    return;
+  }
+
+  try {
+    elements.contractLoadStatus.textContent = 'Spostamento contratto...';
+    const response = await authenticatedFetch(`/api/contracts/${encodeURIComponent(contractId)}/owner`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ownerUserId }),
+    });
+    const body = await safeJson(response);
+    if (!response.ok) {
+      throw new Error(body?.error || 'Errore spostamento contratto.');
+    }
+
+    const cached = state.contractsCache.find((entry) => entry.id === contractId);
+    if (cached) {
+      cached.owner_user_id = sanitizeText(body?.item?.owner_user_id) || ownerUserId;
+      const ownerUser = (state.adminUsersCache || []).find((user) => sanitizeText(user.id) === ownerUserId);
+      if (ownerUser) {
+        cached.owner_name = sanitizeText(ownerUser.full_name);
+        cached.owner_email = sanitizeText(ownerUser.email);
+      }
+      renderContractList(state.contractsCache);
+    }
+
+    elements.contractLoadStatus.textContent = 'Contratto spostato.';
+    setStatus('Contratto spostato a un altro utente.', 'success');
+  } catch (error) {
+    elements.contractLoadStatus.textContent = error.message || 'Errore spostamento.';
+    setStatus(elements.contractLoadStatus.textContent, 'danger');
+  }
 }
 
 async function loadContractFromCloud(id) {

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.67';
+const APP_VERSION = '1.68';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
@@ -9,6 +9,7 @@ const MAX_CONTRACT_ATTACHMENT_SIZE_BYTES = 25 * 1024 * 1024;
 const CONTRACT_ATTACHMENT_SLOTS = [
   { key: 'docFront', pathPrefix: 'doc-front', label: 'Fronte documento', required: true, inputId: 'documentFrontUpload', infoId: 'documentFrontInfo', errorId: 'documentFrontError' },
   { key: 'docBack', pathPrefix: 'doc-back', label: 'Retro documento', required: true, inputId: 'documentBackUpload', infoId: 'documentBackInfo', errorId: 'documentBackError' },
+  { key: 'selfie', pathPrefix: 'selfie', label: 'Selfie', required: false, inputId: 'documentSelfieUpload', infoId: 'documentSelfieInfo', errorId: 'documentSelfieError' },
   { key: 'visura', pathPrefix: 'visura', label: 'Visura camerale', required: false, inputId: 'visuraUpload', infoId: 'visuraInfo', errorId: 'visuraError' },
 ];
 const AUTH_TOKEN_CACHE_KEY = 'contract-generator-auth-token-v1';
@@ -601,6 +602,9 @@ const elements = {
   documentBackUpload: document.getElementById('documentBackUpload'),
   documentBackInfo: document.getElementById('documentBackInfo'),
   documentBackError: document.getElementById('documentBackError'),
+  documentSelfieUpload: document.getElementById('documentSelfieUpload'),
+  documentSelfieInfo: document.getElementById('documentSelfieInfo'),
+  documentSelfieError: document.getElementById('documentSelfieError'),
   visuraUpload: document.getElementById('visuraUpload'),
   visuraInfo: document.getElementById('visuraInfo'),
   visuraError: document.getElementById('visuraError'),
@@ -1605,6 +1609,11 @@ function bindEvents() {
   elements.btnContractSaveUpdate.addEventListener('click', updateCurrentContractInCloud);
   elements.btnContractRefresh.addEventListener('click', refreshContractList);
   elements.contractLoadFilter.addEventListener('input', () => renderContractList(state.contractsCache));
+  elements.contractLoadList.addEventListener('change', (event) => {
+    if (event.target.matches('[data-contract-owner-select]')) {
+      syncContractOwnerSelectTitles();
+    }
+  });
   elements.contractLoadList.addEventListener('click', (event) => {
     const button = event.target.closest('button[data-contract-action]');
     if (!button) {
@@ -5035,6 +5044,38 @@ function renderContractList(items) {
       </div>
     `;
   }).join('');
+
+  syncContractOwnerSelectTitles();
+}
+
+function getUserInitials(user) {
+  const fullName = sanitizeText(user?.full_name);
+  if (fullName) {
+    const parts = fullName.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return `${parts[0][0]}.${parts[1][0]}.`.toUpperCase();
+    }
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  const email = sanitizeText(user?.email);
+  if (email) {
+    const local = email.split('@')[0] || '';
+    const tokens = local.split(/[._-]+/).filter(Boolean);
+    if (tokens.length >= 2) {
+      return `${tokens[0][0]}.${tokens[1][0]}.`.toUpperCase();
+    }
+    return (local.slice(0, 2) || email.slice(0, 2)).toUpperCase();
+  }
+
+  return '--';
+}
+
+function syncContractOwnerSelectTitles() {
+  elements.contractLoadList?.querySelectorAll('[data-contract-owner-select]').forEach((select) => {
+    const option = select.options[select.selectedIndex];
+    select.title = sanitizeText(option?.title) || sanitizeText(option?.textContent);
+  });
 }
 
 function renderContractOwnerOptions(currentOwnerId) {
@@ -5044,17 +5085,18 @@ function renderContractOwnerOptions(currentOwnerId) {
     .map((user) => ({
       id: sanitizeText(user.id),
       label: sanitizeText(user.full_name) || sanitizeText(user.email) || sanitizeText(user.id),
+      initials: getUserInitials(user),
     }))
     .filter((user) => user.id);
 
   const hasCurrent = users.some((user) => user.id === normalizedCurrent);
   const options = users.map((user) => {
     const selected = user.id === normalizedCurrent ? ' selected' : '';
-    return `<option value="${escapeHtml(user.id)}"${selected}>${escapeHtml(user.label)}</option>`;
+    return `<option value="${escapeHtml(user.id)}" title="${escapeHtml(user.label)}"${selected}>${escapeHtml(user.initials)}</option>`;
   });
 
   if (normalizedCurrent && !hasCurrent) {
-    options.unshift(`<option value="${escapeHtml(normalizedCurrent)}" selected>Utente attuale</option>`);
+    options.unshift(`<option value="${escapeHtml(normalizedCurrent)}" title="Utente attuale" selected>--</option>`);
   }
 
   return options.join('');

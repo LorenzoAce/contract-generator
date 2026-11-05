@@ -1,6 +1,6 @@
 {
   "name": "contract-generator",
-  "version": "1.0.77",
+  "version": "1.0.78",
   "description": "",
   "main": "server.js",
   "scripts": {
@@ -16,6 +16,7 @@
     "bootstrap": "^5.3.3",
     "express": "^4.21.2",
     "jose": "^6.2.12",
+    "nodemailer": "^10.3.1",
     "pdf-lib": "^1.17.1",
     "pg": "^8.13.1"
   }

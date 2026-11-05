@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { Readable } = require('stream');
 const express = require('express');
+const nodemailer = require('nodemailer');
 const { put: putBlob, get: getBlob } = require('@vercel/blob');
 
 loadEnvFile(path.join(__dirname, '.env'));
@@ -14,6 +15,7 @@ const {
   createSignatureToken,
   deleteContract,
   deleteImportedContractTemplate,
+  getAppSetting,
   deleteUserById,
   getContractBySignatureToken,
   getContract,
@@ -23,6 +25,7 @@ const {
   listImportedContractTemplates,
   listUsers,
   listPdfTemplates,
+  saveAppSetting,
   saveContract,
   saveContractBySignatureToken,
   saveImportedContractTemplate,
@@ -44,6 +47,7 @@ const {
 
 const PORT = Number(process.env.PORT) || 3000;
 const SERVER_ATTACHMENT_RELAY_LIMIT_BYTES = 4 * 1024 * 1024;
+const JSON_BODY_LIMIT = '25mb';
 
 const NEON_AUTH_PROXY_PATH = '/api/auth-proxy';
 
@@ -123,11 +127,148 @@ async function handleAuthProxy(req, res) {
   }
 }
 
+function readBooleanEnv(name, fallback = false) {
+  const normalized = String(process.env[name] || '').trim().toLowerCase();
+  if (!normalized) {
+    return fallback;
+  }
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+}
+
+function normalizeMailSettings(rawValue = {}) {
+  const raw = rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue) ? rawValue : {};
+  return {
+    host: String(raw.host || '').trim(),
+    port: Number(raw.port) || 587,
+    user: String(raw.user || '').trim(),
+    pass: String(raw.pass || '').trim(),
+    from: String(raw.from || '').trim(),
+    secure: raw.secure === undefined ? null : Boolean(raw.secure),
+    ignoreTls: Boolean(raw.ignoreTls),
+    requireTls: Boolean(raw.requireTls),
+    tlsRejectUnauthorized: raw.tlsRejectUnauthorized === undefined ? true : Boolean(raw.tlsRejectUnauthorized),
+  };
+}
+
+async function getStoredMailSettings() {
+  try {
+    const row = await getAppSetting({ key: 'smtp_config' });
+    return normalizeMailSettings(row?.value || {});
+  } catch (error) {
+    if (String(error?.message || '').includes('Database non configurato')) {
+      return normalizeMailSettings({});
+    }
+    throw error;
+  }
+}
+
+function buildMailSettingsResponse(settings) {
+  const normalized = normalizeMailSettings(settings);
+  return {
+    host: normalized.host,
+    port: normalized.port,
+    user: normalized.user,
+    from: normalized.from,
+    secure: normalized.secure === null ? normalized.port === 465 : normalized.secure,
+    ignoreTls: normalized.ignoreTls,
+    requireTls: normalized.requireTls,
+    tlsRejectUnauthorized: normalized.tlsRejectUnauthorized,
+    hasPassword: Boolean(normalized.pass),
+  };
+}
+
+async function getMailTransportConfig() {
+  const stored = await getStoredMailSettings();
+  const host = stored.host || String(process.env.SMTP_HOST || '').trim();
+  const port = stored.port || Number(process.env.SMTP_PORT) || 587;
+  const user = stored.user || String(process.env.SMTP_USER || '').trim();
+  const pass = stored.pass || String(process.env.SMTP_PASS || '').trim();
+  const from = stored.from || String(process.env.SMTP_FROM || user || '').trim();
+
+  if (!host) {
+    throw new Error('SMTP_HOST non configurato.');
+  }
+  if (user && !pass) {
+    throw new Error('SMTP_PASS non configurato.');
+  }
+  if (!from) {
+    throw new Error('SMTP_FROM non configurato.');
+  }
+
+  const transport = {
+    host,
+    port,
+    secure: stored.secure === null ? readBooleanEnv('SMTP_SECURE', port === 465) : stored.secure,
+  };
+
+  if (user) {
+    transport.auth = { user, pass };
+  }
+  const ignoreTls = stored.ignoreTls || readBooleanEnv('SMTP_IGNORE_TLS', false);
+  const requireTls = stored.requireTls || readBooleanEnv('SMTP_REQUIRE_TLS', false);
+  const tlsRejectUnauthorized = stored.pass || stored.host || stored.user || stored.from
+    ? stored.tlsRejectUnauthorized
+    : readBooleanEnv('SMTP_TLS_REJECT_UNAUTHORIZED', true);
+  if (ignoreTls) {
+    transport.ignoreTLS = true;
+  }
+  if (requireTls) {
+    transport.requireTLS = true;
+  }
+  if (!tlsRejectUnauthorized) {
+    transport.tls = { rejectUnauthorized: false };
+  }
+
+  return { transport, from };
+}
+
+async function streamToBuffer(stream) {
+  const nodeStream = typeof stream?.pipe === 'function'
+    ? stream
+    : stream
+      ? Readable.fromWeb(stream)
+      : null;
+  if (!nodeStream) {
+    return Buffer.from([]);
+  }
+
+  const chunks = [];
+  for await (const chunk of nodeStream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+async function downloadPrivateBlobAttachment(pathname, requestedName = '', fallbackContentType = 'application/octet-stream') {
+  const normalizedPathname = String(pathname || '').trim();
+  const config = blobClientTokenHandler.resolveUploadConfig(normalizedPathname);
+  if (!config || !normalizedPathname.toLowerCase().startsWith('contract-documents/')) {
+    throw new Error('Percorso allegato non consentito.');
+  }
+
+  const { blobToken, blobStoreId } = blobClientTokenHandler.getBlobServerConfig();
+  const getOptions = {
+    access: 'private',
+    token: blobToken,
+  };
+  if (blobStoreId) {
+    getOptions.storeId = blobStoreId;
+  }
+
+  const result = await getBlob(normalizedPathname, getOptions);
+  const content = await streamToBuffer(result.stream);
+  return {
+    filename: String(requestedName || path.basename(normalizedPathname) || 'allegato').trim(),
+    content,
+    contentType: result.blob?.contentType || fallbackContentType,
+  };
+}
+
 const app = express();
 
 app.use(NEON_AUTH_PROXY_PATH, express.raw({ type: '*/*', limit: '2mb' }), handleAuthProxy);
 
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
 app.post('/api/blob-client-token', async (req, res) => {
   const pathname = String(req.body?.pathname || '');
@@ -257,6 +398,77 @@ app.post('/api/contract-attachments/upload', express.raw({ type: '*/*', limit: '
   }
 });
 
+app.post('/api/contracts/send-email', async (req, res) => {
+  const user = await requireAuth(req, res);
+  if (!user) {
+    return;
+  }
+
+  try {
+    const to = String(req.body?.to || '').trim().toLowerCase();
+    const subject = String(req.body?.subject || '').trim();
+    const message = String(req.body?.message || '').trim();
+    const contractFileName = String(req.body?.contractFileName || 'contratto.pdf').trim() || 'contratto.pdf';
+    const contractPdfBase64 = String(req.body?.contractPdfBase64 || '').trim();
+    const requestedAttachments = Array.isArray(req.body?.attachments) ? req.body.attachments : [];
+
+    if (!to || !subject || !message || !contractPdfBase64) {
+      res.status(400).json({ error: 'Destinatario, oggetto, messaggio e PDF del contratto sono obbligatori.' });
+      return;
+    }
+
+    const contractContent = Buffer.from(contractPdfBase64, 'base64');
+    if (!contractContent.length) {
+      res.status(400).json({ error: 'PDF del contratto non valido.' });
+      return;
+    }
+
+    const mailConfig = await getMailTransportConfig();
+    const transporter = nodemailer.createTransport(mailConfig.transport);
+    const attachments = [
+      {
+        filename: contractFileName.replace(/"/g, '') || 'contratto.pdf',
+        content: contractContent,
+        contentType: 'application/pdf',
+      },
+    ];
+
+    for (const item of requestedAttachments) {
+      const pathname = String(item?.pathname || '').trim();
+      if (!pathname) {
+        continue;
+      }
+      attachments.push(await downloadPrivateBlobAttachment(
+        pathname,
+        String(item?.fileName || '').trim(),
+        String(item?.contentType || '').trim() || 'application/octet-stream',
+      ));
+    }
+
+    await transporter.sendMail({
+      from: mailConfig.from,
+      to,
+      subject,
+      text: message,
+      attachments,
+    });
+
+    res.json({
+      ok: true,
+      attachmentsCount: attachments.length,
+      recipient: to,
+    });
+  } catch (error) {
+    const message = error?.message || 'Errore invio e-mail.';
+    const statusCode = message.includes('non configurato')
+      ? 503
+      : message.includes('non consentito')
+        ? 400
+        : 500;
+    res.status(statusCode).json({ error: message });
+  }
+});
+
 app.get('/api/health', async (_req, res) => {
   try {
     res.json(await checkHealth());
@@ -302,6 +514,62 @@ app.get('/api/auth-config', handleAuthConfig);
 
 app.get('/api/auth/me', handleAuthMe);
 app.get('/api/me', handleAuthMe);
+
+app.get('/api/admin/email-settings', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) {
+    return;
+  }
+
+  try {
+    const settings = await getStoredMailSettings();
+    res.json({ item: buildMailSettingsResponse(settings) });
+  } catch (error) {
+    res.status(500).json({ error: error?.message || 'Errore caricamento impostazioni e-mail.' });
+  }
+});
+
+app.post('/api/admin/email-settings', async (req, res) => {
+  const user = await requireAdmin(req, res);
+  if (!user) {
+    return;
+  }
+
+  try {
+    const existing = await getStoredMailSettings();
+    const normalized = normalizeMailSettings({
+      host: req.body?.host,
+      port: req.body?.port,
+      user: req.body?.user,
+      pass: String(req.body?.pass || '').trim() ? req.body?.pass : existing.pass,
+      from: req.body?.from,
+      secure: req.body?.secure,
+      ignoreTls: req.body?.ignoreTls,
+      requireTls: req.body?.requireTls,
+      tlsRejectUnauthorized: req.body?.tlsRejectUnauthorized,
+    });
+
+    if (!normalized.host) {
+      throw new Error('Host SMTP obbligatorio.');
+    }
+    if (!normalized.from) {
+      throw new Error('Email mittente obbligatoria.');
+    }
+    if (normalized.user && !normalized.pass) {
+      throw new Error('Password SMTP obbligatoria quando specifichi un utente.');
+    }
+
+    const saved = await saveAppSetting({
+      key: 'smtp_config',
+      value: normalized,
+    });
+    res.json({ item: buildMailSettingsResponse(saved?.value || normalized) });
+  } catch (error) {
+    const message = error?.message || 'Errore salvataggio impostazioni e-mail.';
+    const statusCode = message.includes('obbligatoria') || message.includes('obbligatorio') ? 400 : 500;
+    res.status(statusCode).json({ error: message });
+  }
+});
 
 app.get('/api/users', async (req, res) => {
   const user = await requireAdmin(req, res);

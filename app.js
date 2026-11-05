@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.77';
+const APP_VERSION = '1.78';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
@@ -9,6 +9,10 @@ const CONTRACT_ATTACHMENT_UPLOAD_ROUTE_URL = '/api/contract-attachments/upload';
 const CONTRACT_ATTACHMENT_ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
 const MAX_CONTRACT_ATTACHMENT_SIZE_BYTES = 25 * 1024 * 1024;
 const CONTRACT_ATTACHMENT_UPLOAD_TIMEOUT_MS = 60 * 1000;
+const DEFAULT_ACTIVATION_EMAIL_TO = 'infocommerciali@vincitu.net';
+const DEFAULT_ACTIVATION_EMAIL_BODY = `Buongiorno,
+
+in allegato i documenti per l'attivazione di un PVR. Saluti`;
 const CONTRACT_ATTACHMENT_SLOTS = [
   { key: 'docFront', pathPrefix: 'doc-front', label: 'Fronte documento', required: true, inputId: 'documentFrontUpload', infoId: 'documentFrontInfo', errorId: 'documentFrontError' },
   { key: 'docBack', pathPrefix: 'doc-back', label: 'Retro documento', required: true, inputId: 'documentBackUpload', infoId: 'documentBackInfo', errorId: 'documentBackError' },
@@ -597,6 +601,7 @@ const elements = {
   btnSalva: document.getElementById('btnSalva'),
   btnCarica: document.getElementById('btnCarica'),
   btnGenera: document.getElementById('btnGenera'),
+  btnSendEmail: document.getElementById('btnSendEmail'),
   btnCaricaFirma: document.getElementById('btnCaricaFirma'),
   btnPulisciFirma: document.getElementById('btnPulisciFirma'),
   btnInserisciFirma: document.getElementById('btnInserisciFirma'),
@@ -619,6 +624,10 @@ const elements = {
   antimafiaSummary: document.getElementById('antimafiaSummary'),
   finalSummary: document.getElementById('finalSummary'),
   finalChecklist: document.getElementById('finalChecklist'),
+  emailSendTo: document.getElementById('emailSendTo'),
+  emailSendSubject: document.getElementById('emailSendSubject'),
+  emailSendBody: document.getElementById('emailSendBody'),
+  emailSendStatus: document.getElementById('emailSendStatus'),
   documentFrontUpload: document.getElementById('documentFrontUpload'),
   documentFrontInfo: document.getElementById('documentFrontInfo'),
   documentFrontError: document.getElementById('documentFrontError'),
@@ -680,6 +689,17 @@ const elements = {
   userAdminModal: document.getElementById('userAdminModal'),
   adminUsersList: document.getElementById('adminUsersList'),
   adminUsersStatus: document.getElementById('adminUsersStatus'),
+  adminEmailHost: document.getElementById('adminEmailHost'),
+  adminEmailPort: document.getElementById('adminEmailPort'),
+  adminEmailUser: document.getElementById('adminEmailUser'),
+  adminEmailPass: document.getElementById('adminEmailPass'),
+  adminEmailFrom: document.getElementById('adminEmailFrom'),
+  adminEmailSecure: document.getElementById('adminEmailSecure'),
+  adminEmailIgnoreTls: document.getElementById('adminEmailIgnoreTls'),
+  adminEmailRequireTls: document.getElementById('adminEmailRequireTls'),
+  adminEmailTlsRejectUnauthorized: document.getElementById('adminEmailTlsRejectUnauthorized'),
+  adminEmailSettingsStatus: document.getElementById('adminEmailSettingsStatus'),
+  btnAdminSaveEmailSettings: document.getElementById('btnAdminSaveEmailSettings'),
   adminCreateFullName: document.getElementById('adminCreateFullName'),
   adminCreateEmail: document.getElementById('adminCreateEmail'),
   adminCreatePassword: document.getElementById('adminCreatePassword'),
@@ -1208,6 +1228,125 @@ function setAdminUsersStatus(message) {
   }
 }
 
+function setAdminEmailSettingsStatus(message, tone = 'secondary') {
+  if (!elements.adminEmailSettingsStatus) {
+    return;
+  }
+  elements.adminEmailSettingsStatus.textContent = sanitizeText(message) || 'Configura il mittente e salva le impostazioni SMTP.';
+  elements.adminEmailSettingsStatus.classList.remove('text-secondary', 'text-danger', 'text-success', 'text-warning', 'text-info');
+  const className = {
+    success: 'text-success',
+    danger: 'text-danger',
+    warning: 'text-warning',
+    info: 'text-info',
+  }[tone] || 'text-secondary';
+  elements.adminEmailSettingsStatus.classList.add(className);
+}
+
+function populateAdminEmailSettingsForm(settings = {}) {
+  if (elements.adminEmailHost) {
+    elements.adminEmailHost.value = sanitizeText(settings.host);
+  }
+  if (elements.adminEmailPort) {
+    elements.adminEmailPort.value = Number(settings.port) || 587;
+  }
+  if (elements.adminEmailUser) {
+    elements.adminEmailUser.value = sanitizeText(settings.user);
+  }
+  if (elements.adminEmailPass) {
+    elements.adminEmailPass.value = '';
+    elements.adminEmailPass.dataset.hasPassword = settings.hasPassword ? 'true' : 'false';
+    elements.adminEmailPass.placeholder = settings.hasPassword
+      ? 'Lascia vuoto per mantenere la password salvata'
+      : 'Inserisci la password SMTP';
+  }
+  if (elements.adminEmailFrom) {
+    elements.adminEmailFrom.value = sanitizeText(settings.from);
+  }
+  if (elements.adminEmailSecure) {
+    elements.adminEmailSecure.checked = Boolean(settings.secure);
+  }
+  if (elements.adminEmailIgnoreTls) {
+    elements.adminEmailIgnoreTls.checked = Boolean(settings.ignoreTls);
+  }
+  if (elements.adminEmailRequireTls) {
+    elements.adminEmailRequireTls.checked = Boolean(settings.requireTls);
+  }
+  if (elements.adminEmailTlsRejectUnauthorized) {
+    elements.adminEmailTlsRejectUnauthorized.checked = settings.tlsRejectUnauthorized !== false;
+  }
+}
+
+async function loadAdminEmailSettings() {
+  if (state.currentUser?.role !== 'admin') {
+    return;
+  }
+
+  try {
+    setAdminEmailSettingsStatus('Caricamento impostazioni e-mail...', 'info');
+    const response = await authenticatedFetch('/api/admin/email-settings');
+    const body = await safeJson(response);
+    if (!response.ok) {
+      throw new Error(body?.error || 'Errore caricamento impostazioni e-mail.');
+    }
+    populateAdminEmailSettingsForm(body?.item || {});
+    setAdminEmailSettingsStatus('Impostazioni e-mail caricate.', 'success');
+  } catch (error) {
+    setAdminEmailSettingsStatus(error.message || 'Errore caricamento impostazioni e-mail.', 'danger');
+  }
+}
+
+async function handleAdminSaveEmailSettings() {
+  try {
+    const host = sanitizeText(elements.adminEmailHost?.value);
+    const port = Number(elements.adminEmailPort?.value) || 587;
+    const user = sanitizeText(elements.adminEmailUser?.value);
+    const pass = String(elements.adminEmailPass?.value || '').trim();
+    const from = sanitizeText(elements.adminEmailFrom?.value).toLowerCase();
+    const secure = Boolean(elements.adminEmailSecure?.checked);
+    const ignoreTls = Boolean(elements.adminEmailIgnoreTls?.checked);
+    const requireTls = Boolean(elements.adminEmailRequireTls?.checked);
+    const tlsRejectUnauthorized = Boolean(elements.adminEmailTlsRejectUnauthorized?.checked);
+
+    if (!host) {
+      throw new Error('Inserisci l host SMTP.');
+    }
+    if (!from || !isValidEmail(from)) {
+      throw new Error('Inserisci un email mittente valida.');
+    }
+    const hasSavedPassword = elements.adminEmailPass?.dataset.hasPassword === 'true';
+    if (user && !pass && !hasSavedPassword) {
+      throw new Error('Inserisci la password SMTP.');
+    }
+
+    setAdminEmailSettingsStatus('Salvataggio impostazioni e-mail...', 'info');
+    const response = await authenticatedFetch('/api/admin/email-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        host,
+        port,
+        user,
+        pass,
+        from,
+        secure,
+        ignoreTls,
+        requireTls,
+        tlsRejectUnauthorized,
+      }),
+    });
+    const body = await safeJson(response);
+    if (!response.ok) {
+      throw new Error(body?.error || 'Errore salvataggio impostazioni e-mail.');
+    }
+
+    populateAdminEmailSettingsForm(body?.item || {});
+    setAdminEmailSettingsStatus('Impostazioni e-mail salvate correttamente.', 'success');
+  } catch (error) {
+    setAdminEmailSettingsStatus(error.message || 'Errore salvataggio impostazioni e-mail.', 'danger');
+  }
+}
+
 function resetAdminCreateForm() {
   if (elements.adminCreateFullName) {
     elements.adminCreateFullName.value = '';
@@ -1529,9 +1668,13 @@ function bindEvents() {
   elements.btnOpenUserAdmin?.addEventListener('click', () => {
     clearAdminEditState();
     void refreshUsersList();
+    void loadAdminEmailSettings();
   });
   elements.btnAdminCreateUser?.addEventListener('click', () => {
     void handleAdminCreateUser();
+  });
+  elements.btnAdminSaveEmailSettings?.addEventListener('click', () => {
+    void handleAdminSaveEmailSettings();
   });
   elements.btnAdminSaveUser?.addEventListener('click', () => {
     void handleAdminSaveUser();
@@ -1566,6 +1709,9 @@ function bindEvents() {
     if (pdfBytes) {
       downloadGeneratedPdf();
     }
+  });
+  elements.btnSendEmail?.addEventListener('click', () => {
+    void sendContractByEmail();
   });
   elements.btnCaricaFirma.addEventListener('click', () => {
     elements.signatureUpload.click();
@@ -5620,6 +5766,7 @@ function refreshUi() {
   updateWizardUi();
   updateStepVisibility();
   updateReviewSummaries();
+  updateEmailComposerDefaults();
   updateChecklist();
   updateStepperStatus();
 }
@@ -5841,6 +5988,61 @@ function renderSummaryGrid(container, rows) {
       <span class="summary-item__value">${escapeHtml(value || 'Da completare')}</span>
     </div>
   `).join('');
+}
+
+function getDefaultActivationEmailSubject(data = collectFormData()) {
+  const agentCommerciale = sanitizeText(data.presentedBy) || 'Da completare';
+  const societa = sanitizeText(data.companyName) || 'Da completare';
+  return `Nuova attivazione PVR - ${agentCommerciale} | ${societa}`;
+}
+
+function syncEmailComposerFieldValue(field, nextValue) {
+  if (!field) {
+    return;
+  }
+  const resolvedValue = String(nextValue || '');
+  const currentValue = String(field.value || '');
+  const previousAutoValue = String(field.dataset.autoValue || '');
+  if (!currentValue || currentValue === previousAutoValue) {
+    field.value = resolvedValue;
+  }
+  field.dataset.autoValue = resolvedValue;
+}
+
+function resetEmailSendStatus() {
+  if (!elements.emailSendStatus) {
+    return;
+  }
+  elements.emailSendStatus.textContent = 'Il contratto PDF e gli allegati caricati verranno inviati insieme.';
+  elements.emailSendStatus.dataset.state = 'idle';
+  elements.emailSendStatus.classList.remove('text-danger', 'text-success', 'text-warning', 'text-info');
+  elements.emailSendStatus.classList.add('text-secondary');
+}
+
+function setEmailSendStatus(message, tone = 'secondary') {
+  if (!elements.emailSendStatus) {
+    return;
+  }
+  elements.emailSendStatus.textContent = sanitizeText(message) || 'Operazione e-mail completata.';
+  elements.emailSendStatus.dataset.state = tone;
+  elements.emailSendStatus.classList.remove('text-secondary', 'text-danger', 'text-success', 'text-warning', 'text-info');
+  const className = {
+    success: 'text-success',
+    danger: 'text-danger',
+    warning: 'text-warning',
+    info: 'text-info',
+  }[tone] || 'text-secondary';
+  elements.emailSendStatus.classList.add(className);
+}
+
+function updateEmailComposerDefaults() {
+  const data = collectFormData();
+  syncEmailComposerFieldValue(elements.emailSendTo, DEFAULT_ACTIVATION_EMAIL_TO);
+  syncEmailComposerFieldValue(elements.emailSendSubject, getDefaultActivationEmailSubject(data));
+  syncEmailComposerFieldValue(elements.emailSendBody, DEFAULT_ACTIVATION_EMAIL_BODY);
+  if (!elements.emailSendStatus?.dataset.state || elements.emailSendStatus.dataset.state === 'idle') {
+    resetEmailSendStatus();
+  }
 }
 
 function updateChecklist() {
@@ -7239,6 +7441,103 @@ function downloadGeneratedPdf() {
     link.remove();
   }, 1000);
   setStatus('Download del PDF avviato.', 'success');
+}
+
+function collectEmailAttachmentDescriptors() {
+  return CONTRACT_ATTACHMENT_SLOTS.map((slot) => {
+    const metadata = state.attachments?.[slot.key];
+    const pathname = sanitizeText(metadata?.pathname);
+    if (!pathname) {
+      return null;
+    }
+    return {
+      pathname,
+      fileName: sanitizeText(metadata?.name) || `${slot.key}.bin`,
+      contentType: sanitizeText(metadata?.contentType),
+    };
+  }).filter(Boolean);
+}
+
+function uint8ArrayToBase64(bytes) {
+  const array = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let index = 0; index < array.length; index += chunkSize) {
+    binary += String.fromCharCode(...array.subarray(index, index + chunkSize));
+  }
+  return window.btoa(binary);
+}
+
+async function sendContractByEmail() {
+  const recipient = sanitizeText(elements.emailSendTo?.value).toLowerCase();
+  const subject = sanitizeText(elements.emailSendSubject?.value);
+  const message = String(elements.emailSendBody?.value || '').trim();
+
+  if (!recipient || !isValidEmail(recipient)) {
+    setEmailSendStatus('Inserisci un indirizzo email destinatario valido.', 'danger');
+    setStatus('Inserisci un indirizzo email destinatario valido.', 'danger');
+    elements.emailSendTo?.focus();
+    return;
+  }
+
+  if (!subject) {
+    setEmailSendStatus('Inserisci un oggetto email valido.', 'danger');
+    setStatus('Inserisci un oggetto email valido.', 'danger');
+    elements.emailSendSubject?.focus();
+    return;
+  }
+
+  if (!message) {
+    setEmailSendStatus('Inserisci il messaggio email.', 'danger');
+    setStatus('Inserisci il messaggio email.', 'danger');
+    elements.emailSendBody?.focus();
+    return;
+  }
+
+  const button = elements.btnSendEmail;
+  if (button) {
+    button.disabled = true;
+  }
+  setEmailSendStatus('Generazione PDF e invio e-mail in corso...', 'info');
+
+  try {
+    const pdfBytes = state.generatedPdfBytes || await buildPdf();
+    if (!pdfBytes) {
+      throw new Error('Impossibile generare il PDF da allegare all e-mail.');
+    }
+
+    const response = await authenticatedFetch('/api/contracts/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: recipient,
+        subject,
+        message,
+        contractFileName: buildGeneratedPdfFileName(),
+        contractPdfBase64: uint8ArrayToBase64(pdfBytes),
+        attachments: collectEmailAttachmentDescriptors(),
+      }),
+    });
+    const body = await safeJson(response);
+    if (!response.ok) {
+      throw new Error(body?.error || 'Errore durante l invio dell e-mail.');
+    }
+
+    const totalAttachments = Number(body?.attachmentsCount) || 0;
+    const successMessage = totalAttachments > 1
+      ? `E-mail inviata correttamente con ${totalAttachments} allegati.`
+      : 'E-mail inviata correttamente.';
+    setEmailSendStatus(successMessage, 'success');
+    setStatus(successMessage, 'success');
+  } catch (error) {
+    const messageText = error.message || 'Errore durante l invio dell e-mail.';
+    setEmailSendStatus(messageText, 'danger');
+    setStatus(messageText, 'danger');
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
+  }
 }
 
 function resetGeneratedPdf() {

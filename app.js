@@ -1,11 +1,12 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.68';
+const APP_VERSION = '1.69';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
 const CONTRACT_ATTACHMENT_ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
 const MAX_CONTRACT_ATTACHMENT_SIZE_BYTES = 25 * 1024 * 1024;
+const CONTRACT_ATTACHMENT_UPLOAD_TIMEOUT_MS = 60 * 1000;
 const CONTRACT_ATTACHMENT_SLOTS = [
   { key: 'docFront', pathPrefix: 'doc-front', label: 'Fronte documento', required: true, inputId: 'documentFrontUpload', infoId: 'documentFrontInfo', errorId: 'documentFrontError' },
   { key: 'docBack', pathPrefix: 'doc-back', label: 'Retro documento', required: true, inputId: 'documentBackUpload', infoId: 'documentBackInfo', errorId: 'documentBackError' },
@@ -5295,17 +5296,46 @@ async function uploadContractAttachment(slot, file) {
   }
 
   const pathname = buildContractAttachmentPath(slot, file);
-  const clientToken = await fetchContractAttachmentToken(pathname);
-  const blob = await put(pathname, file, { access: 'public', token: clientToken });
-  return {
-    name: sanitizeText(file.name),
-    url: sanitizeText(blob.url),
-    downloadUrl: sanitizeText(blob.downloadUrl || blob.url),
-    pathname: sanitizeText(blob.pathname || pathname),
-    size: Number(blob.size) || file.size || 0,
-    contentType: sanitizeText(blob.contentType) || file.type || '',
-    uploadedAt: new Date().toISOString(),
-  };
+  let timeoutId = 0;
+
+  try {
+    elements[slot.infoId].textContent = 'Richiesta token upload...';
+    const clientToken = await fetchContractAttachmentToken(pathname);
+    elements[slot.infoId].textContent = 'Token ricevuto. Avvio upload...';
+
+    const uploadPromise = put(pathname, file, {
+      access: 'public',
+      token: clientToken,
+      onUploadProgress: ({ loaded, total, percentage }) => {
+        const resolvedTotal = Number(total) || Number(file.size) || 0;
+        elements[slot.infoId].textContent = `Caricamento in corso... ${Math.round(Number(percentage) || 0)}% (${loaded}/${resolvedTotal} byte)`;
+      },
+    });
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = window.setTimeout(() => reject(new Error('Timeout caricamento file. Verifica la connessione e riprova.')), CONTRACT_ATTACHMENT_UPLOAD_TIMEOUT_MS);
+    });
+
+    const blob = await Promise.race([uploadPromise, timeoutPromise]);
+    return {
+      name: sanitizeText(file.name),
+      url: sanitizeText(blob.url),
+      downloadUrl: sanitizeText(blob.downloadUrl || blob.url),
+      pathname: sanitizeText(blob.pathname || pathname),
+      size: Number(blob.size) || file.size || 0,
+      contentType: sanitizeText(blob.contentType) || file.type || '',
+      uploadedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    const message = sanitizeText(error?.message);
+    if (message.includes('BLOB_READ_WRITE_TOKEN') || message.includes('BLOB_STORE_ID') || message.includes('Blob')) {
+      throw new Error('Vercel Blob non e configurato correttamente. Verifica BLOB_READ_WRITE_TOKEN e, se presente nel progetto, anche BLOB_STORE_ID.');
+    }
+    throw new Error(message || 'Errore durante il caricamento del file.');
+  } finally {
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
+  }
 }
 
 async function handleAttachmentUploadChange(slotKey) {
@@ -5320,7 +5350,7 @@ async function handleAttachmentUploadChange(slotKey) {
   }
 
   elements[slot.errorId].textContent = '';
-  elements[slot.infoId].textContent = 'Caricamento in corso...';
+  elements[slot.infoId].textContent = 'Preparazione caricamento...';
 
   try {
     const metadata = await uploadContractAttachment(slot, file);

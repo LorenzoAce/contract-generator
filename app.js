@@ -1,9 +1,10 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.70';
+const APP_VERSION = '1.71';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
+const PRIVATE_BLOB_DOWNLOAD_ROUTE_URL = '/api/blob-file';
 const CONTRACT_ATTACHMENT_UPLOAD_ROUTE_URL = '/api/contract-attachments/upload';
 const CONTRACT_ATTACHMENT_ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
 const MAX_CONTRACT_ATTACHMENT_SIZE_BYTES = 25 * 1024 * 1024;
@@ -2393,7 +2394,7 @@ async function uploadImportedContractPdfViaBlob(draft) {
     }
     setImportContractUploadPhase('Token Blob ricevuto. Avvio upload diretto...');
     const blob = await put(buildImportedContractBlobPath(draft), draft.sourceFile, {
-      access: 'public',
+      access: 'private',
       token: clientToken,
       onUploadProgress: ({ loaded, total, percentage }) => {
         const resolvedTotal = Number(total) || Number(draft.sourceFile?.size) || 0;
@@ -2404,7 +2405,7 @@ async function uploadImportedContractPdfViaBlob(draft) {
     return {
       storageMode: 'vercel-blob',
       url: blob.url,
-      downloadUrl: blob.downloadUrl || blob.url,
+      downloadUrl: buildPrivateBlobDownloadUrl(blob.pathname || buildImportedContractBlobPath(draft), draft.fileName),
       pathname: blob.pathname || buildImportedContractBlobPath(draft),
       size: Number(blob.size) || draft.sourceFile.size || 0,
       contentType: blob.contentType || draft.contentType || 'application/pdf',
@@ -5262,6 +5263,19 @@ function buildContractAttachmentPath(slot, file) {
   return `contract-documents/${state.attachmentScopeId}/${slot.pathPrefix}-${unique}.${safeExtension}`;
 }
 
+function buildPrivateBlobDownloadUrl(pathname, fileName = '') {
+  const normalizedPathname = sanitizeText(pathname);
+  if (!normalizedPathname) {
+    return '';
+  }
+  const params = new URLSearchParams({ pathname: normalizedPathname });
+  const normalizedFileName = sanitizeText(fileName);
+  if (normalizedFileName) {
+    params.set('fileName', normalizedFileName);
+  }
+  return `${PRIVATE_BLOB_DOWNLOAD_ROUTE_URL}?${params.toString()}`;
+}
+
 async function fetchContractAttachmentToken(pathname) {
   const response = await authenticatedFetch(BLOB_TOKEN_ROUTE_URL, {
     method: 'POST',
@@ -5298,7 +5312,7 @@ async function uploadContractAttachmentViaServer(pathname, file) {
   return {
     name: sanitizeText(body?.name) || sanitizeText(file.name),
     url: sanitizeText(body?.url),
-    downloadUrl: sanitizeText(body?.downloadUrl || body?.url),
+    downloadUrl: sanitizeText(body?.downloadUrl) || buildPrivateBlobDownloadUrl(body?.pathname || pathname, body?.name || file.name),
     pathname: sanitizeText(body?.pathname || pathname),
     size: Number(body?.size) || file.size || 0,
     contentType: sanitizeText(body?.contentType) || file.type || '',
@@ -5337,7 +5351,7 @@ async function uploadContractAttachment(slot, file) {
     elements[slot.infoId].textContent = 'Token ricevuto. Avvio upload...';
 
     const uploadPromise = put(pathname, file, {
-      access: 'public',
+      access: 'private',
       token: clientToken,
       onUploadProgress: ({ loaded, total, percentage }) => {
         const resolvedTotal = Number(total) || Number(file.size) || 0;
@@ -5352,7 +5366,7 @@ async function uploadContractAttachment(slot, file) {
     return {
       name: sanitizeText(file.name),
       url: sanitizeText(blob.url),
-      downloadUrl: sanitizeText(blob.downloadUrl || blob.url),
+      downloadUrl: buildPrivateBlobDownloadUrl(blob.pathname || pathname, file.name),
       pathname: sanitizeText(blob.pathname || pathname),
       size: Number(blob.size) || file.size || 0,
       contentType: sanitizeText(blob.contentType) || file.type || '',
@@ -5424,8 +5438,8 @@ function renderAttachmentSlot(slot) {
     return;
   }
   const metadata = state.attachments?.[slot.key];
-  if (metadata?.url) {
-    const href = escapeHtml(metadata.downloadUrl || metadata.url);
+  if (metadata?.url || metadata?.pathname) {
+    const href = escapeHtml(metadata.downloadUrl || buildPrivateBlobDownloadUrl(metadata.pathname, metadata.name) || metadata.url);
     const name = escapeHtml(metadata.name || 'Allegato');
     infoEl.innerHTML = `<a href="${href}" target="_blank" rel="noopener" download>${name}</a> · <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-attachment-remove="${escapeHtml(slot.key)}">Rimuovi</button>`;
   } else {
@@ -6274,7 +6288,8 @@ async function loadImportedTemplateAsset(importedTemplate) {
     || sanitizeText(importedTemplate?.template_hash)
     || 'template-importato.pdf';
   const templateHash = sanitizeText(importedTemplate?.template_hash);
-  const blobUrl = sanitizeText(templateStorage.downloadUrl || templateStorage.url);
+  const blobPathname = sanitizeText(templateStorage.pathname);
+  const blobUrl = sanitizeText(templateStorage.downloadUrl || buildPrivateBlobDownloadUrl(blobPathname, templateName) || templateStorage.url);
   const storageMode = sanitizeText(templateStorage.storageMode);
   const assetPath = sanitizeText(templateStorage.assetPath);
 
@@ -6290,7 +6305,9 @@ async function loadImportedTemplateAsset(importedTemplate) {
   }
 
   if (storageMode === 'vercel-blob' && blobUrl) {
-    const response = await fetch(blobUrl);
+    const response = blobUrl.startsWith(PRIVATE_BLOB_DOWNLOAD_ROUTE_URL)
+      ? await authenticatedFetch(blobUrl)
+      : await fetch(blobUrl);
     if (!response.ok) {
       throw new Error('Impossibile leggere il template importato da Vercel Blob.');
     }

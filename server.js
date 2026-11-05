@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const { Readable } = require('stream');
 const express = require('express');
-const { put: putBlob } = require('@vercel/blob');
+const { put: putBlob, get: getBlob } = require('@vercel/blob');
 
 loadEnvFile(path.join(__dirname, '.env'));
 loadEnvFile(path.join(__dirname, '.env.local'));
@@ -139,6 +140,61 @@ app.post('/api/blob-client-token', async (req, res) => {
   await blobClientTokenHandler(req, res);
 });
 
+app.get('/api/blob-file', async (req, res) => {
+  const user = await requireAuth(req, res);
+  if (!user) {
+    return;
+  }
+
+  try {
+    const pathname = String(req.query.pathname || '');
+    const requestedName = String(req.query.fileName || '').trim();
+    const config = blobClientTokenHandler.resolveUploadConfig(pathname);
+    if (!config) {
+      throw new Error('Percorso file non consentito.');
+    }
+
+    const { blobToken, blobStoreId } = blobClientTokenHandler.getBlobServerConfig();
+    const getOptions = {
+      access: 'private',
+      token: blobToken,
+    };
+    if (blobStoreId) {
+      getOptions.storeId = blobStoreId;
+    }
+
+    const result = await getBlob(pathname, getOptions);
+    const downloadName = requestedName || path.basename(pathname) || 'file';
+
+    res.setHeader('Content-Type', result.blob?.contentType || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', `inline; filename="${downloadName.replace(/"/g, '')}"`);
+
+    const outputStream = typeof result.stream?.pipe === 'function'
+      ? result.stream
+      : Readable.fromWeb(result.stream);
+    outputStream.on('error', (error) => {
+      if (!res.headersSent) {
+        res.status(500).json({ error: error?.message || 'Errore lettura file.' });
+      } else {
+        res.destroy(error);
+      }
+    });
+    outputStream.pipe(res);
+  } catch (error) {
+    const message = error?.message || 'Errore recupero file.';
+    const statusCode = message.toLowerCase().includes('not found')
+      ? 404
+      : message.includes('non consentito')
+        ? 400
+        : message.includes('non configurato')
+          ? 503
+          : 500;
+    res.status(statusCode).json({ error: message });
+  }
+});
+
 app.post('/api/contract-attachments/upload', express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
   const user = await requireAuth(req, res);
   if (!user) {
@@ -166,7 +222,7 @@ app.post('/api/contract-attachments/upload', express.raw({ type: '*/*', limit: '
     const originalName = String(req.query.fileName || '');
     const { blobToken, blobStoreId } = blobClientTokenHandler.getBlobServerConfig();
     const putOptions = {
-      access: 'public',
+      access: 'private',
       addRandomSuffix: false,
       contentType,
       token: blobToken,
@@ -180,7 +236,7 @@ app.post('/api/contract-attachments/upload', express.raw({ type: '*/*', limit: '
     res.json({
       name: originalName,
       url: blob.url,
-      downloadUrl: blob.downloadUrl || blob.url,
+      downloadUrl: `/api/blob-file?pathname=${encodeURIComponent(blob.pathname || pathname)}&fileName=${encodeURIComponent(originalName || path.basename(blob.pathname || pathname))}`,
       pathname: blob.pathname || pathname,
       size: Number(blob.size) || bytes.length,
       contentType: blob.contentType || contentType,

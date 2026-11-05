@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.73';
+const APP_VERSION = '1.74';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
@@ -369,15 +369,27 @@ const SIGNATURE_LAYOUTS = {
   2: {
     anchor: 'absolute',
     absoluteX: 376,
-    yOffset: -10,
+    // Move the page 2 signature about 2 cm lower.
+    yOffset: -67,
     fixedWidth: 176,
+    maxHeight: 77,
+    height: 34,
+  },
+  3: {
+    anchor: 'after-field',
+    // Move the page 3 signature about 3 cm to the right.
+    xOffset: 101,
+    yOffset: -10,
+    maxWidth: 176,
+    extraWidth: 88,
     maxHeight: 77,
     height: 34,
   },
   4: {
     anchor: 'absolute',
-    absoluteX: 388,
-    yOffset: -4,
+    // Match page 2 placement so the page 4 signature is visible again.
+    absoluteX: 376,
+    yOffset: -67,
     fixedWidth: 176,
     maxHeight: 77,
     height: 34,

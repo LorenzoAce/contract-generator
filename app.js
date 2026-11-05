@@ -1,9 +1,10 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.69';
+const APP_VERSION = '1.70';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
 const BLOB_TOKEN_ROUTE_URL = '/api/blob-client-token';
+const CONTRACT_ATTACHMENT_UPLOAD_ROUTE_URL = '/api/contract-attachments/upload';
 const CONTRACT_ATTACHMENT_ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
 const MAX_CONTRACT_ATTACHMENT_SIZE_BYTES = 25 * 1024 * 1024;
 const CONTRACT_ATTACHMENT_UPLOAD_TIMEOUT_MS = 60 * 1000;
@@ -5278,6 +5279,33 @@ async function fetchContractAttachmentToken(pathname) {
   return clientToken;
 }
 
+async function uploadContractAttachmentViaServer(pathname, file) {
+  const params = new URLSearchParams({
+    pathname,
+    fileName: sanitizeText(file.name),
+  });
+  const response = await authenticatedFetch(`${CONTRACT_ATTACHMENT_UPLOAD_ROUTE_URL}?${params.toString()}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': file.type || 'application/octet-stream',
+    },
+    body: file,
+  });
+  const body = await safeJson(response);
+  if (!response.ok) {
+    throw new Error(sanitizeText(body?.error) || 'Errore caricamento file tramite server.');
+  }
+  return {
+    name: sanitizeText(body?.name) || sanitizeText(file.name),
+    url: sanitizeText(body?.url),
+    downloadUrl: sanitizeText(body?.downloadUrl || body?.url),
+    pathname: sanitizeText(body?.pathname || pathname),
+    size: Number(body?.size) || file.size || 0,
+    contentType: sanitizeText(body?.contentType) || file.type || '',
+    uploadedAt: sanitizeText(body?.uploadedAt) || new Date().toISOString(),
+  };
+}
+
 async function uploadContractAttachment(slot, file) {
   const extension = (sanitizeText(file.name).split('.').pop() || '').toLowerCase();
   if (!CONTRACT_ATTACHMENT_ALLOWED_EXTENSIONS.includes(extension)) {
@@ -5296,6 +5324,11 @@ async function uploadContractAttachment(slot, file) {
   }
 
   const pathname = buildContractAttachmentPath(slot, file);
+  if (!shouldUseDirectBlobUpload(file)) {
+    elements[slot.infoId].textContent = 'Caricamento file tramite server...';
+    return uploadContractAttachmentViaServer(pathname, file);
+  }
+
   let timeoutId = 0;
 
   try {

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const { put: putBlob } = require('@vercel/blob');
 
 loadEnvFile(path.join(__dirname, '.env'));
 loadEnvFile(path.join(__dirname, '.env.local'));
@@ -41,6 +42,7 @@ const {
 } = require('./lib/request-auth');
 
 const PORT = Number(process.env.PORT) || 3000;
+const SERVER_ATTACHMENT_RELAY_LIMIT_BYTES = 4 * 1024 * 1024;
 
 const NEON_AUTH_PROXY_PATH = '/api/auth-proxy';
 
@@ -135,6 +137,68 @@ app.post('/api/blob-client-token', async (req, res) => {
     return;
   }
   await blobClientTokenHandler(req, res);
+});
+
+app.post('/api/contract-attachments/upload', express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
+  const user = await requireAuth(req, res);
+  if (!user) {
+    return;
+  }
+
+  try {
+    const pathname = String(req.query.pathname || '');
+    const config = blobClientTokenHandler.resolveUploadConfig(pathname);
+    if (!config || !pathname.toLowerCase().startsWith('contract-documents/')) {
+      throw new Error('Percorso upload allegato non consentito.');
+    }
+
+    const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.from([]);
+    if (!bytes.length) {
+      throw new Error('File allegato mancante.');
+    }
+
+    const maxSizeInBytes = Math.min(Number(config.maximumSizeInBytes) || SERVER_ATTACHMENT_RELAY_LIMIT_BYTES, SERVER_ATTACHMENT_RELAY_LIMIT_BYTES);
+    if (bytes.length > maxSizeInBytes) {
+      throw new Error('File troppo grande per il caricamento tramite server.');
+    }
+
+    const contentType = String(req.header('content-type') || 'application/octet-stream');
+    const originalName = String(req.query.fileName || '');
+    const { blobToken, blobStoreId } = blobClientTokenHandler.getBlobServerConfig();
+    const putOptions = {
+      access: 'public',
+      addRandomSuffix: false,
+      contentType,
+      token: blobToken,
+    };
+    if (blobStoreId) {
+      putOptions.storeId = blobStoreId;
+    }
+
+    const blob = await putBlob(pathname, bytes, putOptions);
+
+    res.json({
+      name: originalName,
+      url: blob.url,
+      downloadUrl: blob.downloadUrl || blob.url,
+      pathname: blob.pathname || pathname,
+      size: Number(blob.size) || bytes.length,
+      contentType: blob.contentType || contentType,
+      uploadedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message = error?.message || 'Errore caricamento allegato.';
+    const statusCode = message.includes('non consentito')
+      ? 400
+      : message.includes('troppo grande')
+        ? 413
+        : message.includes('mancante')
+          ? 400
+          : message.includes('non configurato')
+            ? 503
+            : 500;
+    res.status(statusCode).json({ error: message });
+  }
 });
 
 app.get('/api/health', async (_req, res) => {

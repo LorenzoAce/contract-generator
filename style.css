@@ -1548,48 +1548,54 @@ body.sign-mode .row {
   }
 
   .app-header > .d-flex {
-    display: grid !important;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas:
-      "logo name name"
-      "pill pill actions"
-      "picker picker picker";
-    align-items: center;
-    column-gap: 0.75rem;
-    row-gap: 0.6rem;
+    display: block !important;
   }
 
-  .brand-block,
-  .hero-toolbar--compact {
-    display: contents;
-  }
-
-  .brand-mark {
-    grid-area: logo;
-    height: 3rem;
-  }
-
-  .brand-copy {
-    grid-area: name;
-  }
-
-  .session-pill {
-    grid-area: pill;
-    justify-self: start;
-  }
-
-  .session-pill__name {
+  .brand-block {
     display: none;
   }
 
-  .contract-picker {
-    grid-area: picker;
+  .hero-toolbar--compact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 0.6rem;
     width: 100%;
+    min-width: 0;
+  }
+
+  .contract-picker {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .contract-picker__label {
+    display: none;
+  }
+
+  .contract-picker__trigger {
+    min-height: 2.9rem;
   }
 
   .header-actions {
-    grid-area: actions;
-    justify-self: end;
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    align-self: stretch;
+  }
+
+  .header-actions .header-menu__trigger,
+  .header-actions .header-logout-btn {
+    min-height: 2.9rem;
+  }
+
+  .header-actions .header-menu__trigger > span:not(.btn-icon) {
+    display: none;
+  }
+
+  .header-actions .dropdown-toggle::after {
+    margin-left: 0;
   }
 
   .contract-picker__trigger-value {

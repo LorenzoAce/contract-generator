@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.76';
+const APP_VERSION = '1.77';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
@@ -524,6 +524,7 @@ const state = {
 
 const elements = {
   appVersion: document.getElementById('appVersion'),
+  loginAppVersion: document.getElementById('loginAppVersion'),
   authGate: document.getElementById('authGate'),
   appShellContent: document.getElementById('appShellContent'),
   authErrorBox: document.getElementById('authErrorBox'),
@@ -743,6 +744,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 function renderAppVersion() {
   if (elements.appVersion) {
     elements.appVersion.textContent = APP_VERSION;
+  }
+  if (elements.loginAppVersion) {
+    elements.loginAppVersion.textContent = APP_VERSION;
   }
   document.title = `Contract Generator ${APP_VERSION}`;
 }
@@ -6860,14 +6864,8 @@ function setRadioGroupValue(fields, fieldName, selectedValue) {
 }
 
 async function drawSignatureOnSignatureLines(pdfDoc, form, anchorTextFieldName) {
-  try {
-    const explicitSignatureField = form.getField('firma');
-    if (explicitSignatureField?.acroField?.getWidgets?.().length) {
-      await drawSignatureOnNamedField(pdfDoc, form, 'firma');
-      return;
-    }
-  } catch (_error) {
-    // Fallback to the legacy anchor-based placement when the explicit field is absent.
+  if (await drawSignatureUsingExplicitFieldIfPresent(pdfDoc, form)) {
+    return;
   }
 
   const signatureFieldName = sanitizeText(anchorTextFieldName) || 'luogo-e-data';
@@ -6930,6 +6928,9 @@ async function fillImportedContractTemplate(pdfDoc, form, fields, data, imported
   }
 
   if (state.signatureDataUrl) {
+    if (await drawSignatureUsingExplicitFieldIfPresent(pdfDoc, form)) {
+      return;
+    }
     const signatureFields = importedFields.filter((field) => field.type === 'signature');
     for (const field of signatureFields) {
       if (field.signaturePlacement) {
@@ -6939,6 +6940,25 @@ async function fillImportedContractTemplate(pdfDoc, form, fields, data, imported
       }
     }
   }
+}
+
+async function drawSignatureUsingExplicitFieldIfPresent(pdfDoc, form, fieldName = 'firma') {
+  const trimmedName = sanitizeText(fieldName);
+  if (!trimmedName) {
+    return false;
+  }
+
+  try {
+    const explicitSignatureField = form.getField(trimmedName);
+    if (!explicitSignatureField?.acroField?.getWidgets?.().length) {
+      return false;
+    }
+  } catch (_error) {
+    return false;
+  }
+
+  await drawSignatureOnNamedField(pdfDoc, form, trimmedName);
+  return true;
 }
 
 async function applyImportedPdfFieldValue(pdfField, field, rawValue, fonts) {

@@ -22,6 +22,11 @@ body.app-shell {
   overflow-x: clip;
 }
 
+body.app-shell:has(.auth-gate:not(.d-none)) {
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
 .auth-gate {
   min-height: 100vh;
   display: flex;
@@ -29,6 +34,11 @@ body.app-shell {
   justify-content: center;
   padding: 1.5rem;
   padding-bottom: calc(1.5rem + 20vh);
+}
+
+body.app-shell:has(.auth-gate:not(.d-none)) .auth-gate {
+  min-height: 100dvh;
+  padding-bottom: 1.5rem;
 }
 
 .auth-gate.d-none {

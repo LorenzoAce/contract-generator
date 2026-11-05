@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.74';
+const APP_VERSION = '1.75';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
@@ -418,6 +418,13 @@ const SIGNATURE_LAYOUTS = {
     maxHeight: 77,
     height: 34,
   },
+};
+
+const SIGNATURE_FALLBACK_PLACEMENTS = {
+  'luogo-e-data': [
+    // Allegato C does not expose the shared anchor widget on page 4.
+    { page: 4, x: 376, y: 76, width: 176, height: 34 },
+  ],
 };
 
 const STEP_DEFINITIONS = [
@@ -6861,6 +6868,7 @@ async function drawSignatureOnSignatureLines(pdfDoc, form, anchorTextFieldName) 
   const signatureImage = await pdfDoc.embedPng(signatureBytes);
   const pages = pdfDoc.getPages();
   const widgets = signatureField.acroField.getWidgets();
+  const widgetPages = new Set();
 
   widgets.forEach((widget, widgetIndex) => {
     const rect = widget.getRectangle();
@@ -6871,6 +6879,7 @@ async function drawSignatureOnSignatureLines(pdfDoc, form, anchorTextFieldName) 
 
     const page = pages[pageIndex];
     const pageNumber = pageIndex + 1;
+    widgetPages.add(pageNumber);
     const layout = SIGNATURE_LAYOUTS[pageNumber] || SIGNATURE_LAYOUTS.default;
     const maxWidth = layout.fixedWidth || Math.min(layout.maxWidth, rect.width + layout.extraWidth);
     const maxHeight = layout.maxHeight || layout.height;
@@ -6888,6 +6897,14 @@ async function drawSignatureOnSignatureLines(pdfDoc, form, anchorTextFieldName) 
       height,
     });
   });
+
+  const fallbackPlacements = SIGNATURE_FALLBACK_PLACEMENTS[signatureFieldName] || [];
+  for (const placement of fallbackPlacements) {
+    if (widgetPages.has(Number(placement?.page))) {
+      continue;
+    }
+    await drawSignatureAtPlacement(pdfDoc, placement);
+  }
 }
 
 async function fillImportedContractTemplate(pdfDoc, form, fields, data, importedTemplate, fonts) {

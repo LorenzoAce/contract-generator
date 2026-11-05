@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.71';
+const APP_VERSION = '1.72';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
@@ -1655,6 +1655,12 @@ function bindEvents() {
     elements[slot.inputId]?.addEventListener('change', () => handleAttachmentUploadChange(slot.key));
   });
   elements.form?.addEventListener('click', (event) => {
+    const downloadButton = event.target.closest('[data-attachment-download]');
+    if (downloadButton) {
+      event.preventDefault();
+      void downloadAttachment(downloadButton.dataset.attachmentDownload);
+      return;
+    }
     const removeButton = event.target.closest('[data-attachment-remove]');
     if (removeButton) {
       removeAttachment(removeButton.dataset.attachmentRemove);
@@ -5432,6 +5438,47 @@ function removeAttachment(slotKey) {
   refreshUi();
 }
 
+async function downloadAttachment(slotKey) {
+  const slot = findAttachmentSlot(slotKey);
+  if (!slot) {
+    return;
+  }
+
+  const metadata = state.attachments?.[slot.key];
+  const href = sanitizeText(metadata?.downloadUrl || buildPrivateBlobDownloadUrl(metadata?.pathname, metadata?.name) || metadata?.url);
+  if (!href) {
+    setStatus('File non disponibile per il download.', 'warning');
+    return;
+  }
+
+  try {
+    elements[slot.infoId].textContent = 'Preparazione download...';
+    const response = href.startsWith('/')
+      ? await authenticatedFetch(href)
+      : await fetch(href);
+    if (!response.ok) {
+      const body = await safeJson(response);
+      throw new Error(body?.error || 'Impossibile scaricare il file.');
+    }
+
+    const fileBlob = await response.blob();
+    const objectUrl = URL.createObjectURL(fileBlob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = sanitizeText(metadata?.name) || 'allegato';
+    anchor.rel = 'noopener';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    setStatus(`Download avviato: ${anchor.download}`, 'success');
+  } catch (error) {
+    setStatus(error.message || 'Impossibile scaricare il file.', 'danger');
+  } finally {
+    renderAttachmentSlot(slot);
+  }
+}
+
 function renderAttachmentSlot(slot) {
   const infoEl = elements[slot.infoId];
   if (!infoEl) {
@@ -5439,9 +5486,8 @@ function renderAttachmentSlot(slot) {
   }
   const metadata = state.attachments?.[slot.key];
   if (metadata?.url || metadata?.pathname) {
-    const href = escapeHtml(metadata.downloadUrl || buildPrivateBlobDownloadUrl(metadata.pathname, metadata.name) || metadata.url);
     const name = escapeHtml(metadata.name || 'Allegato');
-    infoEl.innerHTML = `<a href="${href}" target="_blank" rel="noopener" download>${name}</a> · <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-attachment-remove="${escapeHtml(slot.key)}">Rimuovi</button>`;
+    infoEl.innerHTML = `<button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-attachment-download="${escapeHtml(slot.key)}">${name}</button> · <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-attachment-remove="${escapeHtml(slot.key)}">Rimuovi</button>`;
   } else {
     infoEl.textContent = 'Nessun file selezionato.';
   }

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.75';
+const APP_VERSION = '1.76';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
@@ -6860,6 +6860,16 @@ function setRadioGroupValue(fields, fieldName, selectedValue) {
 }
 
 async function drawSignatureOnSignatureLines(pdfDoc, form, anchorTextFieldName) {
+  try {
+    const explicitSignatureField = form.getField('firma');
+    if (explicitSignatureField?.acroField?.getWidgets?.().length) {
+      await drawSignatureOnNamedField(pdfDoc, form, 'firma');
+      return;
+    }
+  } catch (_error) {
+    // Fallback to the legacy anchor-based placement when the explicit field is absent.
+  }
+
   const signatureFieldName = sanitizeText(anchorTextFieldName) || 'luogo-e-data';
   const signatureField = form.getTextField(signatureFieldName);
   const trimmedSignatureDataUrl = await getTrimmedSignatureDataUrl(state.signatureDataUrl);

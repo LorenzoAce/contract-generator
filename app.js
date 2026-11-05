@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'contract-generator-data-v2';
-const APP_VERSION = '1.78';
+const APP_VERSION = '1.79';
 const SERVERLESS_DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
 const BLOB_CLIENT_MODULE_URL = 'https://esm.sh/@vercel/blob/client';
 const NEON_AUTH_MODULE_URL = 'https://esm.sh/@neondatabase/auth@0.6.0-beta?bundle';
@@ -686,7 +686,9 @@ const elements = {
   importedContractsManagerStatus: document.getElementById('importedContractsManagerStatus'),
   btnRefreshImportedContractsManager: document.getElementById('btnRefreshImportedContractsManager'),
   btnOpenUserAdmin: document.getElementById('btnOpenUserAdmin'),
+  btnOpenSmtpAdmin: document.getElementById('btnOpenSmtpAdmin'),
   userAdminModal: document.getElementById('userAdminModal'),
+  smtpAdminModal: document.getElementById('smtpAdminModal'),
   adminUsersList: document.getElementById('adminUsersList'),
   adminUsersStatus: document.getElementById('adminUsersStatus'),
   adminEmailHost: document.getElementById('adminEmailHost'),
@@ -700,6 +702,8 @@ const elements = {
   adminEmailTlsRejectUnauthorized: document.getElementById('adminEmailTlsRejectUnauthorized'),
   adminEmailSettingsStatus: document.getElementById('adminEmailSettingsStatus'),
   btnAdminSaveEmailSettings: document.getElementById('btnAdminSaveEmailSettings'),
+  emailSendModal: document.getElementById('emailSendModal'),
+  btnConfirmSendEmail: document.getElementById('btnConfirmSendEmail'),
   adminCreateFullName: document.getElementById('adminCreateFullName'),
   adminCreateEmail: document.getElementById('adminCreateEmail'),
   adminCreatePassword: document.getElementById('adminCreatePassword'),
@@ -1149,6 +1153,7 @@ function syncCurrentUserUi() {
     elements.sessionUserRole.textContent = isAdmin ? 'ADMIN' : 'USER';
   }
   elements.btnOpenUserAdmin?.classList.toggle('d-none', !isAdmin);
+  elements.btnOpenSmtpAdmin?.classList.toggle('d-none', !isAdmin);
   elements.btnImportContractPdf?.classList.toggle('d-none', !isAdmin);
   elements.btnManageImportedContracts?.classList.toggle('d-none', !isAdmin);
   elements.btnSaveTemplateToDb?.classList.toggle('d-none', !isAdmin);
@@ -1668,7 +1673,9 @@ function bindEvents() {
   elements.btnOpenUserAdmin?.addEventListener('click', () => {
     clearAdminEditState();
     void refreshUsersList();
-    void loadAdminEmailSettings();
+  });
+  elements.btnOpenSmtpAdmin?.addEventListener('click', () => {
+    openSmtpAdminModal();
   });
   elements.btnAdminCreateUser?.addEventListener('click', () => {
     void handleAdminCreateUser();
@@ -1711,6 +1718,9 @@ function bindEvents() {
     }
   });
   elements.btnSendEmail?.addEventListener('click', () => {
+    openEmailSendModal();
+  });
+  elements.btnConfirmSendEmail?.addEventListener('click', () => {
     void sendContractByEmail();
   });
   elements.btnCaricaFirma.addEventListener('click', () => {
@@ -6045,6 +6055,18 @@ function updateEmailComposerDefaults() {
   }
 }
 
+function openEmailSendModal() {
+  updateEmailComposerDefaults();
+  resetEmailSendStatus();
+  if (elements.emailSendModal) {
+    window.bootstrap.Modal.getOrCreateInstance(elements.emailSendModal).show();
+  }
+}
+
+function openSmtpAdminModal() {
+  void loadAdminEmailSettings();
+}
+
 function updateChecklist() {
   if (isImportedContractSelected()) {
     const uiConfig = getSelectedContractUiConfig();
@@ -7494,7 +7516,7 @@ async function sendContractByEmail() {
     return;
   }
 
-  const button = elements.btnSendEmail;
+  const button = elements.btnConfirmSendEmail;
   if (button) {
     button.disabled = true;
   }
@@ -7529,6 +7551,9 @@ async function sendContractByEmail() {
       : 'E-mail inviata correttamente.';
     setEmailSendStatus(successMessage, 'success');
     setStatus(successMessage, 'success');
+    if (elements.emailSendModal) {
+      window.bootstrap.Modal.getOrCreateInstance(elements.emailSendModal).hide();
+    }
   } catch (error) {
     const messageText = error.message || 'Errore durante l invio dell e-mail.';
     setEmailSendStatus(messageText, 'danger');

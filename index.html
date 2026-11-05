@@ -14,7 +14,7 @@
     <div class="auth-gate__card shadow-lg">
       <div class="auth-gate__brand">
         <img src="./assets/logos/contract-generator-logo.png" alt="" class="auth-gate__logo">
-        <h1 class="h3 mb-0">Contract Generator <span class="app-version" id="loginAppVersion">1.78</span></h1>
+        <h1 class="h3 mb-0">Contract Generator <span class="app-version" id="loginAppVersion">1.79</span></h1>
       </div>
       <div class="alert alert-danger d-none" id="authErrorBox" role="alert"></div>
 
@@ -72,7 +72,7 @@
           <img src="./assets/logos/contract-generator-logo.png" alt="" class="brand-mark">
           <div class="brand-copy">
             <div class="brand-title-row mb-1">
-                <h1 class="display-title mb-0">Contract Generator <span class="app-version" id="appVersion">1.78</span></h1>
+                <h1 class="display-title mb-0">Contract Generator <span class="app-version" id="appVersion">1.79</span></h1>
             </div>
             <p class="hero-copy mb-0">Compilazione guidata del contratto e degli allegati in pochi passaggi.</p>
           </div>
@@ -123,6 +123,7 @@
                 <div class="dropdown-divider"></div>
                 <div class="dropdown-header">Admin</div>
                 <button type="button" class="dropdown-item d-none" id="btnOpenUserAdmin" data-bs-toggle="modal" data-bs-target="#userAdminModal">Gestione Utenti</button>
+                <button type="button" class="dropdown-item d-none" id="btnOpenSmtpAdmin" data-bs-toggle="modal" data-bs-target="#smtpAdminModal">Gestione SMTP</button>
               </div>
             </div>
             <button type="button" class="btn header-menu__trigger header-logout-btn" id="btnLogout" aria-label="Logout" title="Logout">
@@ -780,38 +781,15 @@
                         </span>
                         <span>Genera e scarica PDF</span>
                       </button>
-                      <div class="surface-panel surface-panel--muted p-3">
-                        <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-2 mb-3">
-                          <div>
-                            <h4 class="h6 mb-1">Invia tramite e-mail</h4>
-                            <p class="text-secondary small mb-0">Invia il contratto generato e gli allegati caricati all'indirizzo commerciale.</p>
-                          </div>
-                          <button type="button" class="btn btn-outline-primary" id="btnSendEmail">
-                            <span class="btn-icon" aria-hidden="true">
-                              <svg viewBox="0 0 24 24" focusable="false">
-                                <path d="M4.75 7.25h14.5A1.75 1.75 0 0 1 21 9v8.25A1.75 1.75 0 0 1 19.25 19H4.75A1.75 1.75 0 0 1 3 17.25V9a1.75 1.75 0 0 1 1.75-1.75Z"></path>
-                                <path d="m4 8 8 5 8-5"></path>
-                              </svg>
-                            </span>
-                            <span>Invia tramite e-mail</span>
-                          </button>
-                        </div>
-                        <div class="row g-3">
-                          <div class="col-12">
-                            <label for="emailSendTo" class="form-label">Destinatario</label>
-                            <input type="email" class="form-control" id="emailSendTo" autocomplete="off">
-                          </div>
-                          <div class="col-12">
-                            <label for="emailSendSubject" class="form-label">Oggetto</label>
-                            <input type="text" class="form-control" id="emailSendSubject" autocomplete="off">
-                          </div>
-                          <div class="col-12">
-                            <label for="emailSendBody" class="form-label">Messaggio</label>
-                            <textarea class="form-control" id="emailSendBody" rows="4"></textarea>
-                          </div>
-                        </div>
-                        <div class="small text-secondary mt-3" id="emailSendStatus">Il contratto PDF e gli allegati caricati verranno inviati insieme.</div>
-                      </div>
+                      <button type="button" class="btn btn-outline-primary align-self-start" id="btnSendEmail">
+                        <span class="btn-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" focusable="false">
+                            <path d="M4.75 7.25h14.5A1.75 1.75 0 0 1 21 9v8.25A1.75 1.75 0 0 1 19.25 19H4.75A1.75 1.75 0 0 1 3 17.25V9a1.75 1.75 0 0 1 1.75-1.75Z"></path>
+                            <path d="m4 8 8 5 8-5"></path>
+                          </svg>
+                        </span>
+                        <span>Invia tramite e-mail</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1196,70 +1174,120 @@
           <div class="surface-panel mb-3">
             <div class="small text-secondary" id="adminUsersStatus">Pronto.</div>
           </div>
-          <div class="surface-panel mb-3">
-            <div class="d-flex flex-column flex-lg-row gap-3 align-items-lg-start">
-              <div class="flex-grow-1">
-                <h3 class="h6 mb-1">Configurazione e-mail</h3>
-                <p class="small text-secondary mb-3">Imposta il server SMTP e il mittente usati dal pulsante "Invia tramite e-mail" nel riepilogo finale.</p>
-                <div class="row g-3">
-                  <div class="col-12 col-md-8">
-                    <label for="adminEmailHost" class="form-label required">Host SMTP</label>
-                    <input type="text" class="form-control" id="adminEmailHost" autocomplete="off" placeholder="smtp.example.com">
-                  </div>
-                  <div class="col-12 col-md-4">
-                    <label for="adminEmailPort" class="form-label required">Porta SMTP</label>
-                    <input type="number" class="form-control" id="adminEmailPort" min="1" max="65535" inputmode="numeric" placeholder="587">
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <label for="adminEmailUser" class="form-label">Utente SMTP</label>
-                    <input type="text" class="form-control" id="adminEmailUser" autocomplete="off" placeholder="utente@example.com">
-                  </div>
-                  <div class="col-12 col-md-6">
-                    <label for="adminEmailPass" class="form-label">Password SMTP</label>
-                    <div class="password-field">
-                      <input type="password" class="form-control" id="adminEmailPass" autocomplete="new-password" placeholder="Lascia vuoto per mantenere quella salvata">
-                    </div>
-                  </div>
-                  <div class="col-12">
-                    <label for="adminEmailFrom" class="form-label required">E-mail mittente</label>
-                    <input type="email" class="form-control" id="adminEmailFrom" autocomplete="off" placeholder="noreply@example.com">
-                  </div>
-                  <div class="col-12 col-md-4">
-                    <div class="form-check form-switch mt-md-4 pt-md-2">
-                      <input class="form-check-input" type="checkbox" role="switch" id="adminEmailSecure">
-                      <label class="form-check-label" for="adminEmailSecure">SMTP secure</label>
-                    </div>
-                  </div>
-                  <div class="col-12 col-md-4">
-                    <div class="form-check form-switch mt-md-4 pt-md-2">
-                      <input class="form-check-input" type="checkbox" role="switch" id="adminEmailIgnoreTls">
-                      <label class="form-check-label" for="adminEmailIgnoreTls">Ignora TLS</label>
-                    </div>
-                  </div>
-                  <div class="col-12 col-md-4">
-                    <div class="form-check form-switch mt-md-4 pt-md-2">
-                      <input class="form-check-input" type="checkbox" role="switch" id="adminEmailRequireTls">
-                      <label class="form-check-label" for="adminEmailRequireTls">Richiedi TLS</label>
-                    </div>
-                  </div>
-                  <div class="col-12">
-                    <div class="form-check form-switch">
-                      <input class="form-check-input" type="checkbox" role="switch" id="adminEmailTlsRejectUnauthorized" checked>
-                      <label class="form-check-label" for="adminEmailTlsRejectUnauthorized">Verifica certificato TLS</label>
-                    </div>
-                  </div>
-                </div>
-                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-3">
-                  <div class="small text-secondary" id="adminEmailSettingsStatus">Configura il mittente e salva le impostazioni SMTP.</div>
-                  <button type="button" class="btn btn-primary" id="btnAdminSaveEmailSettings">Salva impostazioni e-mail</button>
-                </div>
-              </div>
-            </div>
-          </div>
           <div class="list-group" id="adminUsersList"></div>
         </div>
         <div class="modal-footer border-0 pt-0">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Chiudi</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="smtpAdminModal" tabindex="-1" aria-labelledby="smtpAdminModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header border-0 pb-0">
+          <div>
+            <div class="eyebrow text-dark mb-2">Admin</div>
+            <h2 class="h4 mb-1" id="smtpAdminModalLabel">Gestione SMTP</h2>
+            <p class="text-secondary mb-0">Configura il server SMTP e il mittente usati dal pulsante "Invia tramite e-mail".</p>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+        </div>
+        <div class="modal-body pt-3">
+          <div class="surface-panel">
+            <div class="row g-3">
+              <div class="col-12 col-md-8">
+                <label for="adminEmailHost" class="form-label required">Host SMTP</label>
+                <input type="text" class="form-control" id="adminEmailHost" autocomplete="off" placeholder="smtp.example.com">
+              </div>
+              <div class="col-12 col-md-4">
+                <label for="adminEmailPort" class="form-label required">Porta SMTP</label>
+                <input type="number" class="form-control" id="adminEmailPort" min="1" max="65535" inputmode="numeric" placeholder="587">
+              </div>
+              <div class="col-12 col-md-6">
+                <label for="adminEmailUser" class="form-label">Utente SMTP</label>
+                <input type="text" class="form-control" id="adminEmailUser" autocomplete="off" placeholder="utente@example.com">
+              </div>
+              <div class="col-12 col-md-6">
+                <label for="adminEmailPass" class="form-label">Password SMTP</label>
+                <div class="password-field">
+                  <input type="password" class="form-control" id="adminEmailPass" autocomplete="new-password" placeholder="Lascia vuoto per mantenere quella salvata">
+                </div>
+              </div>
+              <div class="col-12">
+                <label for="adminEmailFrom" class="form-label required">E-mail mittente</label>
+                <input type="email" class="form-control" id="adminEmailFrom" autocomplete="off" placeholder="noreply@example.com">
+              </div>
+              <div class="col-12 col-md-4">
+                <div class="form-check form-switch mt-md-4 pt-md-2">
+                  <input class="form-check-input" type="checkbox" role="switch" id="adminEmailSecure">
+                  <label class="form-check-label" for="adminEmailSecure">SMTP secure</label>
+                </div>
+              </div>
+              <div class="col-12 col-md-4">
+                <div class="form-check form-switch mt-md-4 pt-md-2">
+                  <input class="form-check-input" type="checkbox" role="switch" id="adminEmailIgnoreTls">
+                  <label class="form-check-label" for="adminEmailIgnoreTls">Ignora TLS</label>
+                </div>
+              </div>
+              <div class="col-12 col-md-4">
+                <div class="form-check form-switch mt-md-4 pt-md-2">
+                  <input class="form-check-input" type="checkbox" role="switch" id="adminEmailRequireTls">
+                  <label class="form-check-label" for="adminEmailRequireTls">Richiedi TLS</label>
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" role="switch" id="adminEmailTlsRejectUnauthorized" checked>
+                  <label class="form-check-label" for="adminEmailTlsRejectUnauthorized">Verifica certificato TLS</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="small text-secondary mt-3" id="adminEmailSettingsStatus">Configura il mittente e salva le impostazioni SMTP.</div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Chiudi</button>
+          <button type="button" class="btn btn-primary" id="btnAdminSaveEmailSettings">Salva impostazioni e-mail</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="emailSendModal" tabindex="-1" aria-labelledby="emailSendModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header border-0 pb-0">
+          <div>
+            <div class="eyebrow text-dark mb-2">E-mail</div>
+            <h2 class="h4 mb-1" id="emailSendModalLabel">Invia tramite e-mail</h2>
+            <p class="text-secondary mb-0">Invia il contratto generato e gli allegati caricati all'indirizzo commerciale.</p>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+        </div>
+        <div class="modal-body pt-3">
+          <div class="surface-panel surface-panel--muted">
+            <div class="row g-3">
+              <div class="col-12">
+                <label for="emailSendTo" class="form-label">Destinatario</label>
+                <input type="email" class="form-control" id="emailSendTo" autocomplete="off">
+              </div>
+              <div class="col-12">
+                <label for="emailSendSubject" class="form-label">Oggetto</label>
+                <input type="text" class="form-control" id="emailSendSubject" autocomplete="off">
+              </div>
+              <div class="col-12">
+                <label for="emailSendBody" class="form-label">Messaggio</label>
+                <textarea class="form-control" id="emailSendBody" rows="5"></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="small text-secondary mt-3" id="emailSendStatus">Il contratto PDF e gli allegati caricati verranno inviati insieme.</div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Chiudi</button>
+          <button type="button" class="btn btn-primary" id="btnConfirmSendEmail">Invia e-mail</button>
         </div>
       </div>
     </div>
